@@ -116,13 +116,16 @@ void ANogsResearchSubsystem::Init()
 			{
 				nResearchTrees.Add(tree);
 			}
-
+		}
+		for (int32 j = 0; j < Cast<ASMLInitMod>(SMLInitActors[i])->mSchematics.Num(); j++)
+		{
 			TSubclassOf<UFGSchematic> schem = Cast<ASMLInitMod>(SMLInitActors[i])->mSchematics[j];
 			if (!toProcess.Contains(schem))
 			{
 				toProcess.Add(schem);
 			}
 		}
+		
 	}
 
 	for (int32 i = 0; i < toProcess.Num(); i++)
