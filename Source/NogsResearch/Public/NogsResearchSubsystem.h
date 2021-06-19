@@ -5,19 +5,17 @@
 #include "CoreMinimal.h"
 #include "FGSubsystem.h"
 #include "FGSchematicManager.h"
-#include "NogsBuildableResearcher.h"
+#include "Buildable/NogsBuildableResearcher.h"
 #include "FGResearchManager.h"
-#include "FGBuildingDescriptor.h"
-#include "FGSchematic.h"
+
 #include "FGCharacterPlayer.h"
 #include "FGInventoryLibrary.h"
-#include "FGUnlockRecipe.h"
-#include "FGUnlockSchematic.h"
-#include "FGItemCategory.h"
-#include "FGBuildGun.h"
-#include "FGSchematicPurchasedDependency.h"
-#include "../SML/mod/actor/SMLInitMod.h"
+
 #include "FGInventoryComponent.h"
+
+#include "NogsResearchWorldSubsystem.h"
+
+#include "Registry/ModContentRegistry.h"
 #include "NogsResearchSubsystem.generated.h"
 
 
@@ -29,95 +27,6 @@
 
 
 
-USTRUCT(BlueprintType)
-struct  NOGSRESEARCH_API  FNogs_Recipe
-{
-	GENERATED_BODY()
-public:
-	FNogs_Recipe();
-	FNogs_Recipe(TSubclassOf< class UFGRecipe > inClass);
-	FNogs_Recipe(TSubclassOf< class UFGRecipe > inClass, TSubclassOf< class UFGSchematic > Schematic);
-
-	UPROPERTY(BlueprintReadWrite)
-		TArray<TSubclassOf<class UFGSchematic>> nUnlockedBy;
-	UPROPERTY(BlueprintReadWrite)
-		TSubclassOf< class UFGRecipe > nRecipeClass;
-
-	TArray<TSubclassOf<class UFGItemDescriptor>> Products()
-	{
-		TArray<TSubclassOf<class UFGItemDescriptor>> out;
-		TArray<FItemAmount> arr = nRecipeClass.GetDefaultObject()->GetProducts();
-		for (int32 i = 0; i < arr.Num(); i++)
-		{
-			out.Add(arr[i].ItemClass);
-		}
-		return out;
-	}
-
-	TArray<TSubclassOf<class UFGItemDescriptor>> Ingredients()
-	{
-		TArray<TSubclassOf<class UFGItemDescriptor>> out;
-		TArray<FItemAmount> arr = nRecipeClass.GetDefaultObject()->GetIngredients();
-		for (int32 i = 0; i < arr.Num(); i++)
-		{
-			out.Add(arr[i].ItemClass);
-		}
-		return out;
-	}
-
-	TArray<TSubclassOf< class UFGItemCategory >> ProductCats()
-	{
-		TArray<TSubclassOf< class UFGItemCategory >> out;
-		TArray<FItemAmount> arr = nRecipeClass.GetDefaultObject()->GetProducts();
-		for (int32 i = 0; i < arr.Num(); i++)
-		{
-			if (!out.Contains(arr[i].ItemClass.GetDefaultObject()->GetItemCategory(arr[i].ItemClass)))
-				out.Add(arr[i].ItemClass.GetDefaultObject()->GetItemCategory(arr[i].ItemClass));
-		}
-		return out;
-	}
-
-	TArray<TSubclassOf< class UFGItemCategory >> IngredientCats()
-	{
-		TArray<TSubclassOf< class UFGItemCategory >> out;
-		TArray<FItemAmount> arr = nRecipeClass.GetDefaultObject()->GetIngredients();
-		for (int32 i = 0; i < arr.Num(); i++)
-		{
-			if(!out.Contains(arr[i].ItemClass.GetDefaultObject()->GetItemCategory(arr[i].ItemClass)))
-				out.Add(arr[i].ItemClass.GetDefaultObject()->GetItemCategory(arr[i].ItemClass));
-		}
-		return out;
-	}
-
-	~FNogs_Recipe() = default;
-
-};
-
-USTRUCT(BlueprintType)
-struct  NOGSRESEARCH_API  FNogs_Schematic
-{
-	GENERATED_BODY()
-public:
-	FNogs_Schematic();
-	FNogs_Schematic(TSubclassOf< class UFGSchematic > inClass);
-
-	UPROPERTY(BlueprintReadWrite)
-		TSubclassOf< class UFGSchematic > nClass;
-
-	UPROPERTY(BlueprintReadWrite)
-		TArray<TSubclassOf<class UFGSchematic>> nDependsOn;
-
-	UPROPERTY(BlueprintReadWrite)
-		TArray<TSubclassOf<class UFGSchematic>> nDependingOnThis;
-
-	UPROPERTY(BlueprintReadWrite)
-		TArray<TSubclassOf<class UFGSchematic>> nVisibilityDepOn;
-
-	UPROPERTY(BlueprintReadWrite)
-		TArray<TSubclassOf<class UFGSchematic>> nVisibilityDepOnThis;
-
-	~FNogs_Schematic() = default;
-};
 
 UCLASS(Blueprintable)
 class NOGSRESEARCH_API ANogsResearchSubsystem : public AFGSubsystem, public IFGSaveInterface
@@ -129,19 +38,20 @@ class NOGSRESEARCH_API ANogsResearchSubsystem : public AFGSubsystem, public IFGS
 
 
 
-
-	void HandleSchematic(TSubclassOf<class UFGSchematic> Schematic);
-
-
-
 	bool GrabItems(UFGInventoryComponent * Inventory);
 
 
 	// Not replicating this , only replicating stored amounts on request or something
 
-
+	UPROPERTY()
+	UNogsResearchWorldSubsystem * Subsystem;
+	UPROPERTY()
 	AFGSchematicManager * SManager;
+	UPROPERTY()
 	AFGResearchManager * RManager;
+	UPROPERTY()
+	AModContentRegistry * ContentManager;
+	
 	// Begin IFGSaveInterface
 	virtual void PreSaveGame_Implementation(int32 saveVersion, int32 gameVersion) override {};
 	virtual void PostSaveGame_Implementation(int32 saveVersion, int32 gameVersion) override {};
@@ -154,20 +64,19 @@ class NOGSRESEARCH_API ANogsResearchSubsystem : public AFGSubsystem, public IFGS
 
 	virtual void Tick(float dt) override;
 
-	TArray<FItemAmount> GetMissingItems();
+	TArray<FItemAmount> GetMissingItems() const;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	void TickMAMResearch();
 
 	void TickSchematicResearch();
+	
+	// FrameIterationIndex ; Optimization solution
+	int32 Index;
 
 public:
 
-	// Executed from Init mod on Server and on Client 
-	// while most parts are server side replicated Schematic and Recipe Array are Client side Generated
-	UFUNCTION(BlueprintCallable, Category = "Research")
-	void Init();
 
 	// This is called when the Buildings lose power, they will unregister themselfs which causes the Time needed to Research to change
 	UFUNCTION(BlueprintCallable, Category = "Research")
@@ -175,10 +84,10 @@ public:
 
 	// Returns the Schematic Time with Science Power Reduction adjusted
 	UFUNCTION(BlueprintPure, Category = "Research")
-		float GetSchematicDurationAdjusted(TSubclassOf<class UFGSchematic> schematic);
+		float GetSchematicDurationAdjusted(TSubclassOf<class UFGSchematic> schematic) const;
 	// The same as above but already Spent time on this is subtracted
 	UFUNCTION(BlueprintPure, Category = "Research")
-		float GetSchematicProgression(TSubclassOf<class UFGSchematic> schematic);
+		float GetSchematicProgression(TSubclassOf<class UFGSchematic> schematic) const;
 
 	// Function for Researchers to Register themselfs 
 	// This caues them to be included for Inventory Item searches as well as counting their Science Points towards the Total Science Points Value
@@ -196,6 +105,13 @@ public:
 	// The BP Version will iterate Schematic Research Trees and process their Dependencies
 	UFUNCTION(BlueprintImplementableEvent)
 		void PopulateSchematicResearchTreeParents();
+	
+	UFUNCTION(BlueprintImplementableEvent)
+		TArray<TSubclassOf<class UFGSchematic>> GetResearchTreeSchematics();
+
+	UFUNCTION(BlueprintImplementableEvent)
+		FNogs_Recipe HandleRecipe();
+
 
 	// Add a Schematic to the Que
 	UFUNCTION(BlueprintCallable)
@@ -220,7 +136,8 @@ public:
 
 	// Return the Percentage 0.f - 1.f  Science Points are Reducing the Time of Schematics by
 	UFUNCTION(BlueprintPure)
-	float GetTimeReductionFactor() {
+	float GetTimeReductionFactor() const
+	{
 		if (!ScienceTimeReductionCurve)
 			return 0.f;
 		return ScienceTimeReductionCurve->GetFloatValue(TotalSciencePower);
@@ -230,33 +147,6 @@ public:
 	UPROPERTY(savegame, BlueprintReadOnly)
 		TArray< ANogsBuildableResearcher * > Researcher;
 
-	// all research Trees 
-	UPROPERTY(Transient, BlueprintReadOnly)
-		TArray<TSubclassOf<class UFGResearchTree>> nResearchTrees;
-
-	// all Schematics
-	UPROPERTY(Transient, BlueprintReadOnly)
-		TArray< TSubclassOf< class UFGSchematic > > mSchematics;
-	
-	// schematics in a struct with easy dependency access
-	UPROPERTY(BlueprintReadWrite, Category = "Info")
-		TMap<TSubclassOf<class UFGSchematic>, FNogs_Schematic> nSchematics;
-
-	// all Recipes
-	UPROPERTY(BlueprintReadOnly, Category = "Info")
-		TArray<TSubclassOf<class UFGRecipe>> mRecipes;
-	// all Recipes in a struct with easy access to some Properties
-	UPROPERTY(BlueprintReadWrite, Category = "Info")
-		TMap<TSubclassOf<class UFGRecipe>, FNogs_Recipe > nRecipes;
-
-	// this suxxs.. should add the research tree to the schematic struct maybe ? 
-	// its possible to have a schematic in 2 Trees, which this map would ignore
-	UPROPERTY(Transient, BlueprintReadWrite)
-		TMap< TSubclassOf<class UFGSchematic>, TSubclassOf<class UFGResearchTree>> SchematicResearchTreeParents;
-
-	// easy access to descriptors -> buildable class and reverse for finding Building Icons 
-	UPROPERTY(BlueprintReadOnly, Category = "Info")
-		TMap<TSubclassOf< UFGBuildingDescriptor >, TSubclassOf< class AFGBuildable >> nBuildGunBuildings;
 
 	// we use this for paying off ResearchTree stuff
 	UPROPERTY(SaveGame,BlueprintReadOnly, Replicated)

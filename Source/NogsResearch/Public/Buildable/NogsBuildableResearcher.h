@@ -6,6 +6,8 @@
 #include "Buildables/FGBuildableStorage.h"
 #include "NogsBuildableResearcher.generated.h"
 
+
+class ANogsResearchSubsystem;
 /**
  * 
  */
@@ -14,23 +16,25 @@ class NOGSRESEARCH_API ANogsBuildableResearcher : public AFGBuildableStorage
 {
 	GENERATED_BODY()
 		ANogsBuildableResearcher();
-public:
-
 
 	virtual void BeginPlay() override;
-	virtual void Factory_Tick(float dt) override;
-
-	virtual bool HasPower() const override;
+public:
+	
+	UFUNCTION(BlueprintCallable)
+	void CheckPower();
+		
+	virtual bool Factory_HasPower() const override;
 
 	UFUNCTION(BlueprintImplementableEvent)
 		void ProductionStateChanged();
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-		float SciencePower = 0.f;
+		float SciencePower;
 
 	UPROPERTY(BlueprintReadWrite)
 		bool Registered;
 
-	AActor * SManager;
+	UPROPERTY()
+	ANogsResearchSubsystem* SManager;;
 
 };

@@ -1,36 +1,30 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// Copyright Epic Games, Inc. All Rights Reserved.
 
 using UnrealBuildTool;
 using System.IO;
 using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using Tools.DotNETCommon;
 
 public class NogsResearch : ModuleRules
 {
-    public NogsResearch(ReadOnlyTargetRules Target) : base(Target)
-    {
-        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+	public NogsResearch(ReadOnlyTargetRules Target) : base(Target)
+	{
+		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(new string[] {
-            "Core", "CoreUObject",
-            "Engine",
-            "InputCore",
-            "OnlineSubsystem", "OnlineSubsystemUtils", "OnlineSubsystemNULL",
-            "SignificanceManager",
-            "PhysX", "APEX", "PhysXVehicles", "ApexDestruction",
-            "AkAudio",
-            "ReplicationGraph",
-            "UMG",
-            "AIModule",
-            "NavigationSystem",
-            "AssetRegistry",
-            "GameplayTasks",
-            "AnimGraphRuntime",
-            "Slate", "SlateCore", "ImageWrapper", "RenderCore", "Json"
-        });
+		var factoryGamePchPath = new DirectoryReference(Path.Combine(Target.ProjectFile.Directory.ToString(), "Source", "FactoryGame", "Public", "FactoryGame.h"));
+        PrivatePCHHeaderFile = factoryGamePchPath.MakeRelativeTo(new DirectoryReference(ModuleDirectory));
 
-        if (Target.Type == TargetRules.TargetType.Editor) {
-			PublicDependencyModuleNames.AddRange(new string[] {"OnlineBlueprintSupport", "AnimGraph"});
-		}
-        PublicDependencyModuleNames.AddRange(new string[] {"FactoryGame", "SML"});
-    }
+        PublicDependencyModuleNames.AddRange(
+			new string[]
+			{
+				"Core", "CoreUObject",
+	            "Engine",
+	            "InputCore",
+				"FactoryGame", "SML"
+				// ... add other public dependencies that you statically link with here ...
+			}
+			);
+	}
 }

@@ -1,16 +1,9 @@
 
 
 #include "NogsResearchSubsystem.h"
-
+#include "NogsResearchWorldSubsystem.h"
 #include "FactoryGame.h"
 
-// Struct constructors
-FNogs_Schematic::FNogs_Schematic(){};
-FNogs_Schematic::FNogs_Schematic(TSubclassOf<UFGSchematic> inClass){nClass = inClass;};
-
-FNogs_Recipe::FNogs_Recipe(){};
-FNogs_Recipe::FNogs_Recipe(TSubclassOf<UFGRecipe> inClass){	nRecipeClass = inClass;}
-FNogs_Recipe::FNogs_Recipe(TSubclassOf<UFGRecipe> inClass, TSubclassOf<UFGSchematic> Schematic){nRecipeClass = inClass;	nUnlockedBy.Add(Schematic);}
 
 // default stuff
 ANogsResearchSubsystem::ANogsResearchSubsystem() : Super() {
@@ -34,8 +27,6 @@ void ANogsResearchSubsystem::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 	DOREPLIFETIME(ANogsResearchSubsystem, Queue);
 	DOREPLIFETIME(ANogsResearchSubsystem, QueItemLocked);
 	DOREPLIFETIME(ANogsResearchSubsystem, TimeSpent);
-
-	
 }
 
 void ANogsResearchSubsystem::BeginPlay()
@@ -43,6 +34,7 @@ void ANogsResearchSubsystem::BeginPlay()
 	Super::BeginPlay();
 
 	// if we dont exclude this for Editor we crash :(
+	FString Name = TEXT("BufferInventory");
 
 #if WITH_EDITOR
 #else
@@ -50,7 +42,7 @@ void ANogsResearchSubsystem::BeginPlay()
 	{
 		if (!mBufferInventory)
 		{
-			mBufferInventory = UFGInventoryLibrary::CreateInventoryComponent(this, TEXT("BufferInventory"));
+			mBufferInventory = UFGInventoryLibrary::CreateInventoryComponent(this, *Name.Append(GetName()));
 			if (mBufferInventory->GetSizeLinear() != 18)
 			{
 				mBufferInventory->Resize(18);
@@ -72,204 +64,35 @@ void ANogsResearchSubsystem::BeginPlay()
 	
 	SManager = AFGSchematicManager::Get(GetWorld());
 	RManager = AFGResearchManager::Get(GetWorld());
-}
+	ContentManager = AModContentRegistry::Get(GetWorld());
+	Subsystem = Cast< UNogsResearchWorldSubsystem>(GetWorld()->GetSubsystemBase(UNogsResearchWorldSubsystem::StaticClass()));
 
-void ANogsResearchSubsystem::Init()
-{
-	// happens on both client and remote
-
-	TArray< TSubclassOf< class UFGSchematic > > toProcess;
-
-	if (SManager)
-	{
-		for (int32 i = 0; i < SManager->mAvailableSchematics.Num(); i++)
-		{
-			if (!SManager->mAvailableSchematics[i])
-				continue;
-			if (!toProcess.Contains(SManager->mAvailableSchematics[i]))
-			{
-				if (!SManager->mAllSchematics.Contains(SManager->mAvailableSchematics[i]))
-				{
-					SManager->mAllSchematics.Add(SManager->mAvailableSchematics[i]);
-				}
-				toProcess.Add(SManager->mAvailableSchematics[i]);
-			}
-		}
-		SManager->mAvailableSchematics = toProcess;
-	}
-
-	if (SManager)
-		SManager->GetAllSchematics(toProcess);
-
-	if (RManager)
-		nResearchTrees = RManager->mAllResearchTrees;
-
-	TArray<AActor*> SMLInitActors;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASMLInitMod::StaticClass(), SMLInitActors);
-
-	for (int32 i = 0; i < SMLInitActors.Num(); i++)
-	{
-		for (int32 j = 0; j < Cast<ASMLInitMod>(SMLInitActors[i])->mResearchTrees.Num(); j++)
-		{
-			class TSubclassOf<UFGResearchTree> tree = Cast<ASMLInitMod>(SMLInitActors[i])->mResearchTrees[j];
-			if (!nResearchTrees.Contains(tree))
-			{
-				nResearchTrees.Add(tree);
-			}
-		}
-		for (int32 j = 0; j < Cast<ASMLInitMod>(SMLInitActors[i])->mSchematics.Num(); j++)
-		{
-			TSubclassOf<UFGSchematic> schem = Cast<ASMLInitMod>(SMLInitActors[i])->mSchematics[j];
-			if (!toProcess.Contains(schem))
-			{
-				toProcess.Add(schem);
-			}
-		}
-		
-	}
-
-	for (int32 i = 0; i < toProcess.Num(); i++)
-	{
-		if (toProcess[i])
-		{
-			if (!mSchematics.Contains(toProcess[i]))
-			{
-				HandleSchematic(toProcess[i]);
-			}
-		}	
-	}
-
-	for (int32 i = 0; i < toProcess.Num(); i++)
-	{
-		if (toProcess[i])
-		{
-			for (int32 k = 0; k < toProcess.Num(); k++)
-			{
-				TArray<  UFGAvailabilityDependency* > out_schematicDependencies;
-				toProcess[k].GetDefaultObject()->GetSchematicDependencies(toProcess[k], out_schematicDependencies);
-				for (int32 j = 0; j < out_schematicDependencies.Num(); j++)
-				{
-					if (!out_schematicDependencies[j])
-						continue;
-					TArray< TSubclassOf< class UFGSchematic > > out_schematics;
-					if (Cast<UFGSchematicPurchasedDependency>(out_schematicDependencies[j]))
-					{
-						Cast<UFGSchematicPurchasedDependency>(out_schematicDependencies[j])->GetSchematics(out_schematics);
-
-						if (out_schematics.Contains(toProcess[i]))
-						{
-							if (!nSchematics.Find(toProcess[i])->nDependingOnThis.Contains(toProcess[k]))
-							{
-								nSchematics.Find(toProcess[i])->nDependingOnThis.Add(toProcess[k]);
-							}
-						}
-
-					}
-				}
-			}
-		}
-	}
-
-	PopulateSchematicResearchTreeParents();
 }
 
 
 void ANogsResearchSubsystem::ReCalculateSciencePower()
 {
 	float Power = 0.f;
-	for (int32 i = 0; i < Researcher.Num(); i++)
+	for (auto i : Researcher)
 	{
-		Power += Researcher[i]->SciencePower;
+		if (i->IsPendingKill())
+		{
+			Researcher.Remove(i);
+			ReCalculateSciencePower();
+			break;
+		}
+		Power += i->SciencePower;
 	}
 	TotalSciencePower = Power;
 }
 
-void ANogsResearchSubsystem::HandleSchematic(TSubclassOf<class UFGSchematic> Schematic)
-{
-	mSchematics.Add(Schematic);
-	FNogs_Schematic newEntry = FNogs_Schematic(Schematic);
-	
-	// Iterate deps and add them to Schematic Struct
-	TArray<  UFGAvailabilityDependency* > out_schematicDependencies;
-	Schematic.GetDefaultObject()->GetSchematicDependencies(Schematic, out_schematicDependencies);
-	for (int32 i = 0; i < out_schematicDependencies.Num(); i++)
-	{
-		if (!out_schematicDependencies[i])
-			continue;
-		TArray< TSubclassOf< class UFGSchematic > > out_schematics;
-		if (Cast<UFGSchematicPurchasedDependency>(out_schematicDependencies[i]))
-		{
-			Cast<UFGSchematicPurchasedDependency>(out_schematicDependencies[i])->GetSchematics(out_schematics);
-			for (int32 j = 0; j < out_schematics.Num(); j++)
-			{
-				if (!out_schematics[j])
-					continue;
-				if(!newEntry.nDependsOn.Contains(out_schematics[j]))
-					newEntry.nDependsOn.Add(out_schematics[j]);
 
-			}
-			
-		}
-	}
-	// Insert Schematic Struct to Map
-	nSchematics.Add(Schematic,newEntry);  
-
-	TArray< UFGUnlock* > unlocks = Schematic.GetDefaultObject()->GetUnlocks(Schematic);
-	for (int32 k = 0; k < unlocks.Num(); k++)
-	{
-		// Recipe unlocks make struct for it and save Buildings found
-		if (Cast<UFGUnlockRecipe>(unlocks[k]))
-		{
-			TArray< TSubclassOf< class UFGRecipe > >  unlockrecipes = Cast<UFGUnlockRecipe>(unlocks[k])->GetRecipesToUnlock();
-			for (int32 j = 0; j < unlockrecipes.Num(); j++)
-			{
-				if (!unlockrecipes[j])
-					continue;
-				FNogs_Recipe rep;
-				if (!nRecipes.Contains(unlockrecipes[j]))
-				{
-					mRecipes.Add(unlockrecipes[j]);
-					rep = FNogs_Recipe(unlockrecipes[j], Schematic);
-					nRecipes.Add(unlockrecipes[j], rep);
-				}
-				else
-				{
-					rep = *nRecipes.Find(unlockrecipes[j]);
-					rep.nUnlockedBy.Add(Schematic);
-				}
-				TArray< TSubclassOf< UObject > > buildclasses;
-				unlockrecipes[j].GetDefaultObject()->GetProducedIn(buildclasses);
-				buildclasses.Remove(nullptr);
-				for (int32 i = 0; i < buildclasses.Num(); i++)
-				{
-					if (rep.Products().IsValidIndex(0))
-					{
-						AFGBuildGun* buildgun = Cast<AFGBuildGun>(buildclasses[i]->GetClass());
-						if (buildgun)
-						{
-							if (!nBuildGunBuildings.Contains(*rep.Products()[0]))
-								nBuildGunBuildings.Add(*rep.Products()[0]);
-						}
-					}
-				}
-			}
-		} // schematics unlocks cause recursion
-		else if (Cast<UFGUnlockSchematic>(unlocks[k]))
-		{
-			TArray< TSubclassOf< class UFGSchematic > > unlockschematics = Cast<UFGUnlockSchematic>(unlocks[k])->GetSchematicsToUnlock();
-			for (int32 j = 0; j < unlockschematics.Num(); j++)
-			{
-				if (!mSchematics.Contains(unlockschematics[j]))
-				{
-					HandleSchematic(unlockschematics[j]);
-				}
-			}
-		}
-	}
-}
 
 void ANogsResearchSubsystem::RegisterResearcher(ANogsBuildableResearcher * building)
 {
+	if (!building)
+		return;
+
 	if (!Researcher.Contains(building))
 	{
 		Researcher.Add(building);
@@ -279,6 +102,9 @@ void ANogsResearchSubsystem::RegisterResearcher(ANogsBuildableResearcher * build
 
 void ANogsResearchSubsystem::UnRegisterResearcher(ANogsBuildableResearcher * building)
 {
+	if (!building)
+		return;
+
 	if (Researcher.Contains(building))
 	{
 		Researcher.Remove(building);
@@ -315,10 +141,10 @@ bool ANogsResearchSubsystem::GrabItems(UFGInventoryComponent * Inventory)
 	if (cost.Num() == 0)
 		return true;
 
-	for (int32 i = 0; i < cost.Num(); i++)
+	for (FItemAmount i : cost)
 	{
 		TArray<TSubclassOf<class UFGItemDescriptor>> lookingFor;
-		lookingFor.Add(cost[i].ItemClass);
+		lookingFor.Add(i.ItemClass);
 
 		TArray<int32> RelevantIndex = Inventory->GetRelevantStackIndexes(lookingFor, 1);
 
@@ -329,9 +155,9 @@ bool ANogsResearchSubsystem::GrabItems(UFGInventoryComponent * Inventory)
 		Inventory->GetStackFromIndex(RelevantIndex[0], stack);
 		if (stack.Item.ItemClass)
 		{
-			if (stack.Item.ItemClass == cost[i].ItemClass && stack.NumItems > 0)
+			if (stack.Item.ItemClass == i.ItemClass && stack.NumItems > 0)
 			{
-				int32 remove = FMath::Clamp(stack.NumItems, 0, cost[i].Amount);
+				int32 remove = FMath::Clamp(stack.NumItems, 0, i.Amount);
 
 				Inventory->RemoveFromIndex(RelevantIndex[0], remove);
 				if (QueItem.GetDefaultObject()->mType == ESchematicType::EST_MAM || QueItem.GetDefaultObject()->mType == ESchematicType::EST_Alternate)
@@ -440,6 +266,7 @@ void ANogsResearchSubsystem::Tick(float dt)
 				break;
 				// not used 
 			}
+		default: break;
 		}
 	}
 	else if (GetSchematicProgression(QueItemLocked) <= 0)
@@ -459,19 +286,20 @@ void ANogsResearchSubsystem::Tick(float dt)
 }
 
 
-TArray<FItemAmount> ANogsResearchSubsystem::GetMissingItems()
+TArray<FItemAmount> ANogsResearchSubsystem::GetMissingItems() const
 {
 	TArray<FItemAmount> cost;
-	if (QueItem.GetDefaultObject()->mType == ESchematicType::EST_MAM)
+	const UFGSchematic *  CDO = QueItem.GetDefaultObject();
+	if (CDO->mType == ESchematicType::EST_MAM)
 	{
-		cost = QueItem.GetDefaultObject()->mCost;
+		cost = CDO->mCost;
 	}
-	else if (QueItem.GetDefaultObject()->mType == ESchematicType::EST_Alternate)
+	else if (CDO->mType == ESchematicType::EST_Alternate)
 	{
 		// cost is usually empty here ..
 		// we are adding 2 Hard Drives as additional cost
 		// this gets quite complicated later on since we use this function to get only what we dont have already
-		cost = QueItem.GetDefaultObject()->mCost; 
+		cost = CDO->mCost; 
 		cost.Add(FItemAmount(AlternateRecipeCostDescriptor, 2));
 	}
 	else
@@ -479,49 +307,40 @@ TArray<FItemAmount> ANogsResearchSubsystem::GetMissingItems()
 		return cost = SManager->GetRemainingCostFor(QueItem);
 	}
 	// check the buffer inventory for items we already have and can subtract from what we need
-	for (int32 j = 0; j < cost.Num(); j++)
+	for (FItemAmount & j : cost)
 	{
-		if (cost[j].Amount == 0)
+		if (j.Amount == 0)
 			continue;
 
-		TArray<TSubclassOf<class UFGItemDescriptor>> lookingFor;
-		lookingFor.Add(cost[j].ItemClass);
-		TArray<int32> RelevantIndex = mBufferInventory->GetRelevantStackIndexes(lookingFor, 1);
+		if (j.Amount > 0)
+		{
+			const int32 LocalAmount = j.Amount - mBufferInventory->GetNumItems(j.ItemClass);
+			j.Amount = FMath::Clamp(LocalAmount, 0, 100000);
+		}
 		
-		if (!RelevantIndex.IsValidIndex(0))
-			continue;
-
-		FInventoryStack stack;
-		mBufferInventory->GetStackFromIndex(RelevantIndex[0], stack);
-		if (stack.Item.ItemClass)
-		{
-			if (stack.Item.ItemClass == cost[j].ItemClass && stack.NumItems > 0)
-			{
-				int32 localamount = cost[j].Amount - stack.NumItems;
-				cost[j].Amount = FMath::Clamp(localamount, 0, 100000);
-			}
-		}
 	}
-	TArray<FItemAmount> costout;
-	for (int32 j = 0; j < cost.Num(); j++)
+	TArray<FItemAmount> CostOut;
+	for (FItemAmount j : cost)
 	{
-		if (cost[j].Amount > 0)
+		if (j.Amount > 0)
 		{
-			costout.Add(cost[j]);
+			CostOut.Add(j);
 		}
 	}
 
-	return costout;
+	return CostOut;
 }
 
 
 void ANogsResearchSubsystem::TickMAMResearch()
 {
+	if (!Subsystem)
+		return;
 	if (RManager->IsResearchComplete(QueItem))
 	{
 		TArray< TSubclassOf< UFGSchematic > > arr;
 		int32 ind = 0;
-		AFGCharacterPlayer * character = Cast<AFGCharacterPlayer>(Instigator);
+		AFGCharacterPlayer * character = Cast<AFGCharacterPlayer>(GetInstigator());
 		while (RManager->ClaimResearchResults(character, QueItem, ind))
 		{
 			ind++;
@@ -532,45 +351,50 @@ void ANogsResearchSubsystem::TickMAMResearch()
 
 	if (RManager->CanResearchBeInitiated(QueItem))
 	{
-		TArray<FItemAmount> needed = GetMissingItems();
-		if (needed.Num() == 0)
+		const TArray<FItemAmount> Needed = GetMissingItems();
+		if (Needed.Num() == 0)
 		{
-			if (SchematicResearchTreeParents.Contains(QueItem))
+			if (Subsystem->SchematicResearchTreeParents.Contains(QueItem))
 			{
-				RManager->InitiateResearch(mBufferInventory, QueItem, *SchematicResearchTreeParents.Find(QueItem));
+				RManager->InitiateResearch(mBufferInventory, QueItem, *Subsystem->SchematicResearchTreeParents.Find(QueItem));
 				QueItemLocked = QueItem;
 			}
 			return;
 		}
 
-		for (int32 i = 0; i < Researcher.Num(); i++)
+		if (Researcher.IsValidIndex(Index))
 		{
-			if (Researcher[i]->IsPendingKill())
+			if (Researcher[Index]->IsPendingKill())
 			{
-				Researcher.Remove(Researcher[i]);
-				break;
+				Researcher.Remove(Researcher[Index]);
+				return;
 			}
 
-			if (Researcher[i]->HasPower())
-			{
-				if (GrabItems(Researcher[i]->GetStorageInventory()))
-				{
-					if (!SchematicResearchTreeParents.Contains(QueItem))
-					{
-						// TODO add logging :Y
-						// should never happen tho :I
-						break;
-					}
 
-					RManager->InitiateResearch(mBufferInventory, QueItem, *SchematicResearchTreeParents.Find(QueItem));
+			if (GrabItems(Researcher[Index]->GetStorageInventory()))
+			{
+				if (!Subsystem->SchematicResearchTreeParents.Contains(QueItem))
+				{
+					// TODO add logging :Y
+					// should never happen tho :I
+					
+				}
+				else
+				{
+					RManager->InitiateResearch(mBufferInventory, QueItem, *Subsystem->SchematicResearchTreeParents.Find(QueItem));
 					QueItemLocked = QueItem;
 					ReCalculateSciencePower();
 					Queue.Remove(QueItem);
 					QueItem = nullptr;
-					break;
 				}
 			}
 		}
+		else
+		{
+			Index = 0;
+			return;
+		}
+		Index += 1;
 	}
 }
 
@@ -583,104 +407,108 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 	{
 		SManager->SetActiveSchematic(QueItem);
 	}
-		
-	for (int32 i = 0; i < Researcher.Num(); i++)
+	if (Researcher.IsValidIndex(Index))
 	{
-		if (Researcher[i]->IsPendingKill())
+		if (Researcher[Index]->IsPendingKill())
 		{
 			// dont wanna crash here
-			Researcher.Remove(Researcher[i]);
-			break;
+			Researcher.Remove(Researcher[Index]);
+			return;
 		}
-		if (Researcher[i]->HasPower())
+
+
+		if (!QueItem)
+			return;
+		const UFGSchematic* CDO = QueItem.GetDefaultObject();
+		if (SManager->IsSchematicPaidOff(QueItem) && CDO->mType != ESchematicType::EST_Alternate)
 		{
-			if (!QueItem)
-				return;
-
-			if (SManager->IsSchematicPaidOff(QueItem) && QueItem.GetDefaultObject()->mType != ESchematicType::EST_Alternate)
-			{
-				break;
-			}
-			
-			if (GrabItems(Researcher[i]->GetStorageInventory()))
-			{
-				break;
-			}
-		}
-		else
-		{
-		}
-	}
-
-	// we check once more on the buffer inventory , if we are already done nothing will happen and we return here
-	if (QueItem.GetDefaultObject()->mType == ESchematicType::EST_Alternate)
-	{
-		TArray<FItemAmount> cost = GetMissingItems();
-		if (cost.Num() == 0)
-		{
-			cost = QueItem.GetDefaultObject()->mCost;
-			cost.Add(FItemAmount(AlternateRecipeCostDescriptor, 2));
-
-			for (int32 j = 0; j < cost.Num(); j++)
-			{
-				if (cost[j].Amount == 0)
-					continue;
-
-				mBufferInventory->Remove(cost[j].ItemClass, cost[j].Amount);
-				
-			}
-
-			SManager->GiveAccessToSchematic(QueItem, false);
+			SManager->LaunchShip();
 			QueItemLocked = QueItem;
 			ReCalculateSciencePower();
 			Queue.Remove(QueItem);
 			QueItem = nullptr;
 			return;
 		}
+		else
+		{
+			if (GrabItems(Researcher[Index]->GetStorageInventory()))
+			{
+				if (CDO->mType == ESchematicType::EST_Alternate)
+				{
+					TArray<FItemAmount> cost = GetMissingItems();
+					if (cost.Num() == 0)
+					{
+						cost = CDO->mCost;
+						cost.Add(FItemAmount(AlternateRecipeCostDescriptor, 2));
+
+						for (FItemAmount j : cost)
+						{
+							if (j.Amount == 0)
+								continue;
+
+							mBufferInventory->Remove(j.ItemClass, j.Amount);
+
+						}
+
+						SManager->GiveAccessToSchematic(QueItem, false);
+						QueItemLocked = QueItem;
+						ReCalculateSciencePower();
+						Queue.Remove(QueItem);
+						QueItem = nullptr;
+						return;
+					}
+				}
+				else if (SManager->IsSchematicPaidOff(QueItem))
+				{
+					SManager->LaunchShip();
+					QueItemLocked = QueItem;
+					ReCalculateSciencePower();
+					Queue.Remove(QueItem);
+					QueItem = nullptr;
+				}
+			}
+		}	
 	}
-	else if(SManager->IsSchematicPaidOff(QueItem))
+	else
 	{
-		SManager->LaunchShip();
-		QueItemLocked = QueItem;
-		ReCalculateSciencePower();
-		Queue.Remove(QueItem);
-		QueItem = nullptr;
+		Index = 0;
+		return;
 	}
-
-	
-
-	
+	Index += 1;
 }
 
-float ANogsResearchSubsystem::GetSchematicDurationAdjusted(TSubclassOf<class UFGSchematic> schematic)
+float ANogsResearchSubsystem::GetSchematicDurationAdjusted(TSubclassOf<class UFGSchematic> schematic) const
 {
 	if (!schematic)
 		return 600.f;
 
-	if (schematic.GetDefaultObject()->mType == ESchematicType::EST_Alternate)
+	const UFGSchematic* CDO = schematic.GetDefaultObject();
+	if (CDO->mType == ESchematicType::EST_Alternate)
 	{
-		return ((schematic.GetDefaultObject()->mTimeToComplete + 300.f)) - ((schematic.GetDefaultObject()->mTimeToComplete + 300.f) * GetTimeReductionFactor());
+		return ((CDO->mTimeToComplete + 300.f)) - ((CDO->mTimeToComplete + 300.f) * GetTimeReductionFactor());
 
 	}
 	else
 	{
-		return (schematic.GetDefaultObject()->mTimeToComplete) - (schematic.GetDefaultObject()->mTimeToComplete * GetTimeReductionFactor());
+		return (CDO->mTimeToComplete) - (CDO->mTimeToComplete * GetTimeReductionFactor());
 
 	}
 }
 
-float ANogsResearchSubsystem::GetSchematicProgression(TSubclassOf<class UFGSchematic> schematic)
+float ANogsResearchSubsystem::GetSchematicProgression(TSubclassOf<class UFGSchematic> schematic) const
 {
 	if (!schematic)
 		return 600.f;
-	if (schematic.GetDefaultObject()->mType == ESchematicType::EST_Alternate)
+	const UFGSchematic* CDO = schematic.GetDefaultObject();
+
+	if (CDO->mType == ESchematicType::EST_Alternate)
 	{
-		return ((schematic.GetDefaultObject()->mTimeToComplete + 300.f) - TimeSpent) - ((schematic.GetDefaultObject()->mTimeToComplete + 300.f) * GetTimeReductionFactor());
+		return ((CDO->mTimeToComplete + 300.f) - TimeSpent) - ((CDO->mTimeToComplete + 300.f) * GetTimeReductionFactor());
 
 	}
 	else
 	{
-		return (schematic.GetDefaultObject()->mTimeToComplete - TimeSpent) - (schematic.GetDefaultObject()->mTimeToComplete * GetTimeReductionFactor());
+		return (CDO->mTimeToComplete - TimeSpent) - (CDO->mTimeToComplete * GetTimeReductionFactor());
 
 	}
 
@@ -688,9 +516,14 @@ float ANogsResearchSubsystem::GetSchematicProgression(TSubclassOf<class UFGSchem
 
 bool ANogsResearchSubsystem::QueSchematic(TSubclassOf<class UFGSchematic> Schematic)
 {
-	if (!SManager->mPurchasedSchematics.Contains(Schematic) && SManager->mAvailableSchematics.Contains(Schematic))
-	{
-	
+	TArray< TSubclassOf< UFGSchematic >> AllSchematics;
+	TArray< TSubclassOf< UFGSchematic >> AllAviSchematics;
+
+	SManager->GetAllPurchasedSchematics(AllSchematics);
+	SManager->GetAvailableSchematics(AllAviSchematics);
+
+	if (!AllSchematics.Contains(Schematic) && AllAviSchematics.Contains(Schematic))
+	{	
 		if (Queue.Contains(Schematic))
 			return true;
 

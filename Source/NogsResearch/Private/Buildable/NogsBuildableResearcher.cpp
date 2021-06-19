@@ -1,6 +1,6 @@
 
 
-#include "NogsBuildableResearcher.h"
+#include "Buildable/NogsBuildableResearcher.h"
 #include "NogsResearchSubsystem.h"
 #include "FGPowerInfoComponent.h"
 
@@ -12,7 +12,6 @@ ANogsBuildableResearcher::ANogsBuildableResearcher() : Super() {
 	this->mMinimumProducingTime = 2;
 	this->mMinimumStoppedTime = 5;
 	this->mNumCyclesForProductivity = 20;
-	this->mCurrentPotential = 1;
 	this->mPendingPotential = 1;
 	this->mMinPotential = 0.00999999977648258;
 	this->mMaxPotential = 1;
@@ -28,6 +27,8 @@ ANogsBuildableResearcher::ANogsBuildableResearcher() : Super() {
 	this->mHighlightParticleClassName = FSoftClassPath("/Game/FactoryGame/Buildable/-Shared/Particle/NewBuildingPing.NewBuildingPing_C");
 	this->bReplicates = true;
 	this->NetCullDistanceSquared = 5624999936;
+	this->Registered = false;
+	this->SManager = nullptr;
 }
 
 
@@ -35,22 +36,25 @@ void ANogsBuildableResearcher::BeginPlay()
 {
 	// for some reason we need to set the Power Info here again otherwise power didnt work
 	Super::BeginPlay();
-	mPowerInfo = Cast< UFGPowerInfoComponent>(GetComponentByClass(UFGPowerInfoComponent::StaticClass()));
+	if(!mPowerInfo)
+		mPowerInfo = Cast< UFGPowerInfoComponent>(GetComponentByClass(UFGPowerInfoComponent::StaticClass()));
+
+
+	mPowerInfo->OnHasPowerChanged.BindUFunction(this, "CheckPower");
 	SManager = ANogsResearchSubsystem::Get(this->GetWorld());
 	if (!HasAuthority())
 		return;
 
 	// we set all slots to our custom Slot Size
-	for (int32 i = 0; i < GetStorageInventory()->mArbitrarySlotSizes.Num(); i++)
+	for (int32 i = 0; i < GetStorageInventory()->GetSizeLinear(); i++)
 	{
-		GetStorageInventory()->mArbitrarySlotSizes[i] = 5000;
+		GetStorageInventory()->AddArbitrarySlotSize(i,5000);
 	}
+
 }
 
-void ANogsBuildableResearcher::Factory_Tick(float dt)
+void ANogsBuildableResearcher::CheckPower()
 {
-	// nothing special here we just register or unregister ourselfs depending on if we have power
-	Super::Factory_Tick(dt);
 	if (HasPower())
 	{
 		if (!Registered)
@@ -58,8 +62,8 @@ void ANogsBuildableResearcher::Factory_Tick(float dt)
 			if (SManager)
 			{
 				Registered = true;
+				SManager->RegisterResearcher(this);
 				ProductionStateChanged();
-				Cast<ANogsResearchSubsystem>(SManager)->RegisterResearcher(this);
 			}
 		}
 	}
@@ -70,7 +74,7 @@ void ANogsBuildableResearcher::Factory_Tick(float dt)
 			if (SManager)
 			{
 				Registered = false;
-				Cast<ANogsResearchSubsystem>(SManager)->UnRegisterResearcher(this);
+				SManager->UnRegisterResearcher(this);
 				ProductionStateChanged();
 			}
 		}
@@ -78,9 +82,10 @@ void ANogsBuildableResearcher::Factory_Tick(float dt)
 }
 
 
-bool ANogsBuildableResearcher::HasPower() const
+bool ANogsBuildableResearcher::Factory_HasPower() const
 {
-	if(GetPowerInfo())
+	Super::Factory_HasPower();
+	if (GetPowerInfo())
 		return GetPowerInfo()->HasPower();
 	return false;
 }
