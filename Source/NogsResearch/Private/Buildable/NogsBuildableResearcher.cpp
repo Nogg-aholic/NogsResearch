@@ -1,6 +1,8 @@
 
 
 #include "Buildable/NogsBuildableResearcher.h"
+
+#include "FGPipeConnectionComponent.h"
 #include "NogsResearchSubsystem.h"
 #include "FGPowerInfoComponent.h"
 
@@ -48,7 +50,18 @@ void ANogsBuildableResearcher::BeginPlay()
 	// we set all slots to our custom Slot Size
 	for (int32 i = 0; i < GetStorageInventory()->GetSizeLinear(); i++)
 	{
-		GetStorageInventory()->AddArbitrarySlotSize(i,5000);
+		GetStorageInventory()->AddArbitrarySlotSize(i,500);
+	}
+
+	FOR_EACH_PIPE_INLINE_COMPONENTS(connection)
+	{
+		if (connection->GetPipeConnectionType() == EPipeConnectionType::PCT_CONSUMER)
+		{
+			connection->SetInventory(GetStorageInventory());
+			connection->SetInventoryAccessIndex(0);
+			Pipe = connection;
+			GetStorageInventory()->AddArbitrarySlotSize(0, 5000* mFluidStackSizeMultiplier);
+		}
 	}
 
 }
@@ -89,3 +102,40 @@ bool ANogsBuildableResearcher::Factory_HasPower() const
 		return GetPowerInfo()->HasPower();
 	return false;
 }
+
+void ANogsBuildableResearcher::Factory_Tick(float dt)
+{
+	if(Pipe)
+	{
+		if(Factory_HasPower())
+		{
+			if(Pipe->IsConnected())
+			{
+				if(GetStorageInventory()->IsSomethingOnIndex(0))
+				{
+					FInventoryStack CurrentItem; GetStorageInventory()->GetStackFromIndex(0,CurrentItem);
+					if(CurrentItem.Item.ItemClass)
+					{
+						FInventoryStack Stack; 
+						Pipe->Factory_PullPipeInput(dt,Stack,CurrentItem.Item.ItemClass ,FMath::Clamp(5000.f * mFluidStackSizeMultiplier - CurrentItem.NumItems,0.f,300.f*dt));
+						if(Stack.HasItems())
+						{
+							GetStorageInventory()->AddStackToIndex(0,Stack);
+						}
+					}
+				}
+				else
+				{
+					FInventoryStack Stack; 
+					Pipe->Factory_PullPipeInput(dt,Stack,nullptr,FMath::Clamp(5000.f * mFluidStackSizeMultiplier,0.f,300.f*dt));
+					if(Stack.HasItems())
+					{
+						GetStorageInventory()->AddStackToIndex(0,Stack);
+					}
+				}
+			}
+		}
+	}
+}
+
+

@@ -2,9 +2,6 @@
 
 using UnrealBuildTool;
 using System.IO;
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
 using Tools.DotNETCommon;
 
 public class NogsResearch : ModuleRules
@@ -21,7 +18,7 @@ public class NogsResearch : ModuleRules
 			{
 				"Core", "CoreUObject",
 	            "Engine",
-	            "InputCore",
+	            "InputCore","UMG",
 				"FactoryGame", "SML"
 				// ... add other public dependencies that you statically link with here ...
 			}

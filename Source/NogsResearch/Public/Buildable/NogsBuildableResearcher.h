@@ -3,6 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+
+#include "FGPipeConnectionComponent.h"
 #include "Buildables/FGBuildableStorage.h"
 #include "NogsBuildableResearcher.generated.h"
 
@@ -25,6 +27,9 @@ public:
 		
 	virtual bool Factory_HasPower() const override;
 
+	virtual void Factory_Tick(float dt) override;
+
+
 	UFUNCTION(BlueprintImplementableEvent)
 		void ProductionStateChanged();
 
@@ -37,4 +42,6 @@ public:
 	UPROPERTY()
 	ANogsResearchSubsystem* SManager;;
 
+	UPROPERTY(BlueprintReadOnly)
+	UFGPipeConnectionComponent* Pipe;
 };
