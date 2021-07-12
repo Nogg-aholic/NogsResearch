@@ -105,6 +105,7 @@ bool ANogsBuildableResearcher::Factory_HasPower() const
 
 void ANogsBuildableResearcher::Factory_Tick(float dt)
 {
+	Super::Factory_Tick(dt);
 	if(Pipe)
 	{
 		if(Factory_HasPower())
