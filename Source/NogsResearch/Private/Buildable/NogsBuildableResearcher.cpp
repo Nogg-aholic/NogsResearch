@@ -106,13 +106,13 @@ bool ANogsBuildableResearcher::Factory_HasPower() const
 void ANogsBuildableResearcher::Factory_Tick(float dt)
 {
 	Super::Factory_Tick(dt);
-	if(Pipe)
+	if(!IsPendingKill() && Pipe)
 	{
 		if(Factory_HasPower())
 		{
 			if(Pipe->IsConnected())
 			{
-				if(GetStorageInventory()->IsSomethingOnIndex(0))
+				if(GetStorageInventory() && GetStorageInventory()->IsSomethingOnIndex(0))
 				{
 					FInventoryStack CurrentItem; GetStorageInventory()->GetStackFromIndex(0,CurrentItem);
 					if(CurrentItem.Item.ItemClass)
