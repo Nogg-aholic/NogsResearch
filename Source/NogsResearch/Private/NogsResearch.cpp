@@ -4,6 +4,10 @@
 
 #define LOCTEXT_NAMESPACE "FNogsResearchModule"
 
+DEFINE_LOG_CATEGORY(LogGame);
+
+DEFINE_LOG_CATEGORY(LogNogsResearch);
+
 void FNogsResearchModule::StartupModule()
 {
 	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
@@ -16,5 +20,5 @@ void FNogsResearchModule::ShutdownModule()
 }
 
 #undef LOCTEXT_NAMESPACE
-	
+
 IMPLEMENT_MODULE(FNogsResearchModule, NogsResearch)

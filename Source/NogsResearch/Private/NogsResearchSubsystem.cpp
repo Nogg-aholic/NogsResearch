@@ -1,17 +1,16 @@
-
-
 #include "NogsResearchSubsystem.h"
+#include "NogsResearch.h"
 #include "FactoryGame.h"
 
 
 // default stuff
 ANogsResearchSubsystem::ANogsResearchSubsystem() : Super() {
-	this->PrimaryActorTick.TickGroup = TG_PrePhysics; 
-	this->PrimaryActorTick.EndTickGroup = TG_PrePhysics; 
-	this->PrimaryActorTick.bTickEvenWhenPaused = false; 
-	this->PrimaryActorTick.bCanEverTick = true; 
+	this->PrimaryActorTick.TickGroup = TG_PrePhysics;
+	this->PrimaryActorTick.EndTickGroup = TG_PrePhysics;
+	this->PrimaryActorTick.bTickEvenWhenPaused = false;
+	this->PrimaryActorTick.bCanEverTick = true;
 	this->PrimaryActorTick.bStartWithTickEnabled = true;
-	this->PrimaryActorTick.bAllowTickOnDedicatedServer = true; 
+	this->PrimaryActorTick.bAllowTickOnDedicatedServer = true;
 	this->PrimaryActorTick.TickInterval = 0;
 	this->bAlwaysRelevant = true;
 	this->bReplicates = true;
@@ -21,69 +20,53 @@ void ANogsResearchSubsystem::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ANogsResearchSubsystem, TotalSciencePower);
-	DOREPLIFETIME(ANogsResearchSubsystem, mBufferInventory);
-	DOREPLIFETIME(ANogsResearchSubsystem, QueItem);
-	DOREPLIFETIME(ANogsResearchSubsystem, Queue);
-	DOREPLIFETIME(ANogsResearchSubsystem, QueItemLocked);
-	DOREPLIFETIME(ANogsResearchSubsystem, TimeSpent);
+	DOREPLIFETIME(ANogsResearchSubsystem, mBufferInventoryMAM);
+	DOREPLIFETIME(ANogsResearchSubsystem, QueueItemHUB);
+	DOREPLIFETIME(ANogsResearchSubsystem, QueueHUB);
+	DOREPLIFETIME(ANogsResearchSubsystem, QueueItemLockedHUB);
+	DOREPLIFETIME(ANogsResearchSubsystem, TimeSpentHUB);
 
-	DOREPLIFETIME(ANogsResearchSubsystem, QueItemMAM);
+	DOREPLIFETIME(ANogsResearchSubsystem, QueueItemMAM);
 	DOREPLIFETIME(ANogsResearchSubsystem, QueueMAM);
-	DOREPLIFETIME(ANogsResearchSubsystem, QueItemLockedMAM);
+	DOREPLIFETIME(ANogsResearchSubsystem, QueueItemLockedMAM);
 	DOREPLIFETIME(ANogsResearchSubsystem, TimeSpentMAM);
-}
-
-
-void ANogsResearchSubsystem::BindOnWidgetConstruct(const TSubclassOf<UUserWidget> WidgetClass, FOnWidgetCreated Binding) {
-	if (!WidgetClass)
-		return;
-	UFunction* ConstructFunction = WidgetClass->FindFunctionByName(TEXT("Construct"));
-	if (!ConstructFunction || ConstructFunction->IsNative())
-	{
-		return;
-	}
-	UBlueprintHookManager* HookManager = GEngine->GetEngineSubsystem<UBlueprintHookManager>();
-	HookManager->HookBlueprintFunction(ConstructFunction, [Binding](FBlueprintHookHelper& HookHelper) {
-		Binding.ExecuteIfBound(Cast<UUserWidget>(HookHelper.GetContext()));
-		}, EPredefinedHookOffset::Return);
 }
 
 void ANogsResearchSubsystem::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// if we dont exclude this for Editor we crash :(
 	FString Name = TEXT("BufferInventory");
 
-#if WITH_EDITOR
-#else
-	if (HasAuthority())
-	{
-		if (!mBufferInventory)
-		{
-			mBufferInventory = UFGInventoryLibrary::CreateInventoryComponent(this, *Name.Append(GetName()));
-			if (mBufferInventory->GetSizeLinear() != 18)
-			{
-				mBufferInventory->Resize(18);
-			}
+	// if we dont exclude this for Editor we crash :( TODO doesn't seem to crash any more?
+//#if WITH_EDITOR
+//#else
+	if (HasAuthority()) {
+		if (!mBufferInventoryMAM) {
+			Name = Name.Append(GetName());
+			mBufferInventoryMAM = UFGInventoryLibrary::CreateInventoryComponent(this, *Name);
+			UE_LOG(LogNogsResearch, Warning, TEXT("Created MAM buffer inventory with name %s"), *Name);
 		}
-		else
-		{
-			if (mBufferInventory->GetSizeLinear() != 18)
-			{
-				mBufferInventory->Resize(18);
-			}
-		}
-		for (int32 i = 0; i < mBufferInventory->mArbitrarySlotSizes.Num(); i++)
-		{
-			mBufferInventory->mArbitrarySlotSizes[i] = 5000;
+		else {
+			UE_LOG(LogNogsResearch, Display, TEXT("MAM buffer inventory already exists, has name %s"), *mBufferInventoryMAM->GetName());
 		}
 
-		mBufferInventory->mItemFilter.BindUFunction(this,"VerifyItem");
+		if (QueueItemMAM) {
+			UpdateMAMBufferFilters(false);
+		}
+		else if (mBufferInventoryMAM->GetSizeLinear() != 18) {
+			UE_LOG(LogNogsResearch, Display, TEXT("No QueueItemMAM so resizing inventory to 18"));
+			mBufferInventoryMAM->Resize(18);
+		}
 
+		/*for (int32 i = 0; i < mBufferInventoryMAM->mArbitrarySlotSizes.Num(); i++) {
+			mBufferInventoryMAM->mArbitrarySlotSizes[i] = 5000;
+		}*/
+
+		mBufferInventoryMAM->mItemFilter.BindUFunction(this, "VerifyMAMBufferItemTransfer");
 	}
-#endif
-	
+//#endif
+
 	SManager = AFGSchematicManager::Get(GetWorld());
 	RManager = AFGResearchManager::Get(GetWorld());
 }
@@ -92,11 +75,11 @@ void ANogsResearchSubsystem::BeginPlay()
 void ANogsResearchSubsystem::ReCalculateSciencePower()
 {
 	float Power = 0.f;
-	for (auto i : Researcher)
+	for (auto i : BuiltResearchers)
 	{
-		if (i->IsPendingKill())
+		if (!i || i->IsPendingKill())
 		{
-			Researcher.Remove(i);
+			BuiltResearchers.Remove(i);
 			ReCalculateSciencePower();
 			return;
 		}
@@ -106,89 +89,93 @@ void ANogsResearchSubsystem::ReCalculateSciencePower()
 }
 
 
-
-void ANogsResearchSubsystem::RegisterResearcher(ANogsBuildableResearcher * building)
+void ANogsResearchSubsystem::RegisterResearcher(ANogsBuildableResearcher* building)
 {
-	if (!building)
+	if (!building) {
 		return;
+	}
 
-	if (!Researcher.Contains(building))
-	{
-		Researcher.Add(building);
+	if (!BuiltResearchers.Contains(building)) {
+		BuiltResearchers.Add(building);
 	}
 	ReCalculateSciencePower();
 }
 
-void ANogsResearchSubsystem::UnRegisterResearcher(ANogsBuildableResearcher * building)
+void ANogsResearchSubsystem::UnRegisterResearcher(ANogsBuildableResearcher* building)
 {
-	if (!building)
+	if (!building) {
 		return;
+	}
 
-	if (Researcher.Contains(building))
-	{
-		Researcher.Remove(building);
+	if (BuiltResearchers.Contains(building)) {
+		BuiltResearchers.Remove(building);
 	}
 	ReCalculateSciencePower();
 }
 
-ANogsResearchSubsystem * ANogsResearchSubsystem::Get(UObject * WorldContext)
+ANogsResearchSubsystem* ANogsResearchSubsystem::Get(UObject* WorldContext)
 {
-	if (!WorldContext)
+	if (!WorldContext) {
 		return nullptr;
-	if (WorldContext->GetWorld())
-	{
-		
-		TArray<AActor *> arr;
+	}
+	if (WorldContext->GetWorld()) {
+
+		TArray<AActor*> arr;
 		UGameplayStatics::GetAllActorsOfClass(WorldContext->GetWorld(), ANogsResearchSubsystem::StaticClass(), arr);
-		if (arr.IsValidIndex(0))
-		{
+		if (arr.IsValidIndex(0)) {
 			ANogsResearchSubsystem* out = Cast<ANogsResearchSubsystem>(arr[0]);
 			return out;
 		}
-		else
-		{
+		else {
 			return nullptr;
 		}
 	}
-	else
+	else {
 		return nullptr;
+	}
 }
 
-bool ANogsResearchSubsystem::GrabItems(UFGInventoryComponent * Inventory, TSubclassOf< class UFGSchematic > Item)
+bool ANogsResearchSubsystem::GrabItems(UFGInventoryComponent* SourceInventory, TSubclassOf< class UFGSchematic > Schematic)
 {
-	TArray<FItemAmount> cost = GetMissingItems(Item);
-	if (cost.Num() == 0)
+	if (!Schematic || !SourceInventory) {
+		return false;
+	}
+
+	TArray<FItemAmount> remainingCost = GetMissingItems(Schematic);
+	if (remainingCost.Num() == 0) {
 		return true;
+	}
 
-	for (FItemAmount i : cost)
-	{
-		if (Inventory->HasItems(i.ItemClass, 1))
-		{
-			const int32 Am = Inventory->GetNumItems(i.ItemClass);
-			int32 remove = FMath::Clamp(i.Amount, 0, Am);
-			FInventoryStack  stack = FInventoryStack();
-			stack.Item.ItemClass = i.ItemClass;
-			stack.NumItems = i.Amount;
+	for (FItemAmount costEntry : remainingCost) {
+		// if we have at least one of the requested remainingCost item
+		if (SourceInventory->HasItems(costEntry.ItemClass, 1)) {
+			// find out how many we actually have
+			int32 quantityPresent = SourceInventory->GetNumItems(costEntry.ItemClass);
+			quantityPresent = FMath::Clamp(costEntry.Amount, 0, quantityPresent);
 
-			if (Item.GetDefaultObject()->mType == ESchematicType::EST_MAM || Item.GetDefaultObject()->mType == ESchematicType::EST_Alternate)
-			{
-				// only if the inventory is not the same we add it, this will be the case when this is an Alternate Schematic and we want to use the remove as payment of the Cost ( no implementation on CSS side for it) 
-				if (mBufferInventory != Inventory && mBufferInventory->HasEnoughSpaceForStack(stack))
-				{
-					Inventory->Remove(i.ItemClass, mBufferInventory->AddStack(stack));
+			// set up this Stack for transfer
+			FInventoryStack stack = FInventoryStack();
+			stack.Item.ItemClass = costEntry.ItemClass;
+			stack.NumItems = quantityPresent;
+
+			if (Schematic.GetDefaultObject()->mType == ESchematicType::EST_MAM || Schematic.GetDefaultObject()->mType == ESchematicType::EST_Alternate) {
+				// TODO this comment is probably from when the research queue interface was its own building
+				if (mBufferInventoryMAM != SourceInventory && mBufferInventoryMAM->HasEnoughSpaceForStack(stack)) {
+					const int32 itemsMoved = mBufferInventoryMAM->AddStack(stack);
+					SourceInventory->Remove(costEntry.ItemClass, itemsMoved);
 				}
 			}
-			else
-			{
-				// Schematic cost are payed off directly 
-				// we dont need to recheck again for what cost is left since this loop is on a descriptor basis and there are no 0 amounts 
+			else {
+				// Schematic costs are paid off via PayOffOnSchematic
+				// we dont need to recheck again for what remainingCost is left since this loop is on a descriptor basis and there are no 0 amounts 
 				TArray<FItemAmount> payoffArray;
-				FItemAmount item = FItemAmount(stack.Item.ItemClass, remove);
-				payoffArray.Add(item);
-				if(SManager->PayOffOnSchematic(Item, payoffArray))
-					Inventory->Remove(i.ItemClass, remove);
+				FItemAmount submission = FItemAmount(stack.Item.ItemClass, quantityPresent);
+				payoffArray.Add(submission);
+				if (SManager->PayOffOnSchematic(Schematic, payoffArray)) {
+					SourceInventory->Remove(costEntry.ItemClass, quantityPresent);
+				}
 
-				if (SManager->IsSchematicPaidOff(Item))
+				if (SManager->IsSchematicPaidOff(Schematic))
 				{
 					return true;
 				}
@@ -202,30 +189,32 @@ bool ANogsResearchSubsystem::GrabItems(UFGInventoryComponent * Inventory, TSubcl
 
 void ANogsResearchSubsystem::Tick(float dt)
 {
-	if (!HasAuthority())
+	if (!HasAuthority()) {
 		return;
-	if(Researcher.Contains(nullptr))
+	}
+	if (BuiltResearchers.Contains(nullptr))
 	{
 		// researchers deleting themselfs are cleared here
-		Researcher.Remove(nullptr);
+		BuiltResearchers.Remove(nullptr);
 	}
 
-	if (!QueItemLocked)
+	if (!QueueItemLockedHUB)
 	{
-		if (!QueItem)
+		if (!QueueItemHUB)
 		{
-			if (Queue.IsValidIndex(0))
+			if (QueueHUB.IsValidIndex(0))
 			{
-				if (Queue[0])
+				if (QueueHUB[0])
 				{
-					QueItem = Queue[0];
-					Queue.RemoveAt(0);
+					QueueItemHUB = QueueHUB[0];
+					QueueHUB.RemoveAt(0);
+					UE_LOG(LogNogsResearch, Display, TEXT("QueueItemHUB became %s"), *QueueItemHUB);
 				}
 			}
 		}
 		else
 		{
-			switch (QueItem.GetDefaultObject()->mType)
+			switch (QueueItemHUB.GetDefaultObject()->mType)
 			{
 			case ESchematicType::EST_Custom:
 			{
@@ -260,9 +249,8 @@ void ANogsResearchSubsystem::Tick(float dt)
 			}
 			case ESchematicType::EST_MAM:
 			{
+				// Handled by MAM section of this function
 				break;
-				// TODO parralel research
-
 			}
 			case ESchematicType::EST_ResourceSink:
 			{
@@ -277,67 +265,64 @@ void ANogsResearchSubsystem::Tick(float dt)
 			default: break;
 			}
 		}
-		
+
 	}
-	else if (GetSchematicProgression(QueItemLocked) <= 0)
+	else if (GetSchematicProgression(QueueItemLockedHUB) <= 0)
 	{
-		QueItemLocked = nullptr;
-		TimeSpent = 0.f;
+		QueueItemLockedHUB = nullptr;
+		TimeSpentHUB = 0.f;
 	}
 	else
 	{
-		TimeSpent += dt;
+		TimeSpentHUB += dt;
 	}
 
-	if (!QueItemLockedMAM)
+	if (!QueueItemLockedMAM)
 	{
-		if (!QueItemMAM)
+		if (!QueueItemMAM)
 		{
 			if (QueueMAM.IsValidIndex(0))
 			{
 				if (QueueMAM[0])
 				{
-					QueItemMAM = QueueMAM[0];
-					const TArray< FItemAmount > Arr = QueItemMAM.GetDefaultObject()->mCost;
-					mBufferInventory->Empty();
-					mBufferInventory->Resize(FMath::Clamp(Arr.Num(),1,18));
-					int32 idx = 0;
-					for (const auto i : Arr)
-					{
-						mBufferInventory->SetAllowedItemOnIndex(idx,i.ItemClass);
-						mBufferInventory->AddArbitrarySlotSize(idx,i.Amount);
-						idx++;
-					}
+					QueueItemMAM = QueueMAM[0];
 					QueueMAM.RemoveAt(0);
+					UE_LOG(LogNogsResearch, Display, TEXT("QueueItemMAM became %s, so dumping contents and resizing"), *QueueItemMAM);
+					UpdateMAMBufferFilters(true);
 				}
 			}
 		}
-		else
-		{
-			switch (QueItemMAM.GetDefaultObject()->mType)
+		else {
+			switch (QueueItemMAM.GetDefaultObject()->mType)
 			{
 			case ESchematicType::EST_Custom:
 			{
+				// Handled by HUB section
 				break;
 			}
 			case ESchematicType::EST_Cheat:
 			{
+				// Handled by HUB section
 				break;
 			}
 			case ESchematicType::EST_Tutorial:
 			{
+				// Handled by HUB section
 				break;
 			}
 			case ESchematicType::EST_Milestone:
 			{
+				// Handled by HUB section
 				break;
 			}
 			case ESchematicType::EST_Alternate:
 			{
+				// Handled by HUB section
 				break;
 			}
 			case ESchematicType::EST_Story:
 			{
+				// Handled by HUB section
 				break;
 			}
 			case ESchematicType::EST_MAM:
@@ -358,10 +343,12 @@ void ANogsResearchSubsystem::Tick(float dt)
 
 		}
 	}
-	else if (GetSchematicProgression(QueItemLockedMAM) <= 0)
+	else if (GetSchematicProgression(QueueItemLockedMAM) <= 0)
 	{
-		RManager->OnResearchTimerCompleteAccessor(QueItemLockedMAM);
-		QueItemLockedMAM = nullptr;
+		// RManager->OnResearchTimerCompleteAccessor(QueueItemLockedMAM);
+		UE_LOG(LogNogsResearch, Display, TEXT("Completed QueueItemLockedMAM: %s"), *QueueItemLockedMAM);
+		RManager->OnResearchTimerComplete(QueueItemLockedMAM);
+		QueueItemLockedMAM = nullptr;
 		TimeSpentMAM = 0.f;
 	}
 	else
@@ -370,199 +357,221 @@ void ANogsResearchSubsystem::Tick(float dt)
 	}
 }
 
+void ANogsResearchSubsystem::UpdateMAMBufferFilters(bool dumpContents)
+{
+	if (!QueueItemMAM) {
+		UE_LOG(LogNogsResearch, Warning, TEXT("Completed QueueItemLockedMAM: %s"), *QueueItemLockedMAM);
+		return;
+	}
+	const TArray< FItemAmount > mamNodeCost = QueueItemMAM.GetDefaultObject()->mCost;
+	if (dumpContents) {
+		// mBufferInventoryMAM->Empty(); // TODO do something other than emptying the inventory here? dump items to world?
+		DumpMAMBufferToHUBTerminalGround();
+	}
+	mBufferInventoryMAM->Resize(FMath::Clamp(mamNodeCost.Num(), 1, 18));
+	int32 bufferInvSlotIndex = 0;
+	for (const auto costEntry : mamNodeCost)
+	{
+		mBufferInventoryMAM->SetAllowedItemOnIndex(bufferInvSlotIndex, costEntry.ItemClass);
+		mBufferInventoryMAM->AddArbitrarySlotSize(bufferInvSlotIndex, costEntry.Amount);
+		bufferInvSlotIndex++;
+	}
+}
 
-TArray<FItemAmount> ANogsResearchSubsystem::GetMissingItems(TSubclassOf< class UFGSchematic > Item) const
+TArray<FItemAmount> ANogsResearchSubsystem::GetMissingItems(TSubclassOf< class UFGSchematic > Schematic) const
 {
 	TArray<FItemAmount> cost;
-	const UFGSchematic *  CDO = Item.GetDefaultObject();
-	if (CDO->mType == ESchematicType::EST_MAM)
-	{
+	const UFGSchematic* CDO = Schematic.GetDefaultObject();
+	if (CDO->mType == ESchematicType::EST_MAM) {
 		cost = CDO->mCost;
 	}
-	else if (CDO->mType == ESchematicType::EST_Alternate)
-	{
-		// cost is usually empty here ..
-		// we are adding 2 Hard Drives as additional cost
+	else if (CDO->mType == ESchematicType::EST_Alternate) {
+		// Cost is usually empty here ..
+		// we are adding 2 Hard Drives as additional Cost
 		// this gets quite complicated later on since we use this function to get only what we dont have already
-		cost = CDO->mCost; 
-		cost.Add(FItemAmount(AlternateRecipeCostDescriptor, 2));
+		cost = CDO->mCost;
+		cost.Add(FItemAmount(AlternateRecipeCostDescriptor, AlternateRecipeCostQuantity));
 	}
-	else
-	{
-		return cost = SManager->GetRemainingCostFor(Item);
+	else {
+		return SManager->GetRemainingCostFor(Schematic);
 	}
+
+	// needs further processing
 	// check the buffer inventory for items we already have and can subtract from what we need
-	for (FItemAmount & j : cost)
-	{
-		if (j.Amount == 0)
+	for (FItemAmount& itemAmount : cost) {
+		if (itemAmount.Amount == 0) {
 			continue;
-
-		if (j.Amount > 0)
-		{
-			const int32 LocalAmount = j.Amount - mBufferInventory->GetNumItems(j.ItemClass);
-			j.Amount = FMath::Clamp(LocalAmount, 0, 100000);
 		}
-		
+
+		if (itemAmount.Amount > 0) {
+			const int32 LocalAmount = itemAmount.Amount - mBufferInventoryMAM->GetNumItems(itemAmount.ItemClass);
+			itemAmount.Amount = FMath::Clamp(LocalAmount, 0, INT_MAX);
+		}
 	}
+
 	TArray<FItemAmount> CostOut;
-	for (FItemAmount j : cost)
-	{
-		if (j.Amount > 0)
-		{
-			CostOut.Add(j);
+	for (FItemAmount itemAmount : cost) {
+		if (itemAmount.Amount > 0) {
+			CostOut.Add(itemAmount);
 		}
 	}
-
 	return CostOut;
 }
 
 
 void ANogsResearchSubsystem::TickMAMResearch()
 {
-	if (!RManager)
-		return;
-	if (RManager->IsResearchComplete(QueItemLockedMAM))
-	{
-		TArray< TSubclassOf< UFGSchematic > > arr;
-		int32 ind = 0;
-		AFGCharacterPlayer * character = Cast<AFGCharacterPlayer>(GetInstigator());
-		while (RManager->ClaimResearchResults(character, QueItemLockedMAM, ind))
-		{
-			ind++;
-		}
-		QueItemLockedMAM = nullptr;
+	if (!RManager) {
 		return;
 	}
 
-	if (RManager->CanResearchBeInitiated(QueItemMAM))
+	if (RManager->IsResearchComplete(QueueItemLockedMAM)) {
+		UE_LOG(LogNogsResearch, Display, TEXT("Awarding rewards for MAM research %s"), *QueueItemLockedMAM);
+		TArray< TSubclassOf< UFGSchematic > > arr;
+		int32 rewardIndex = 0;
+		AFGCharacterPlayer* character = Cast<AFGCharacterPlayer>(GetInstigator());
+		while (RManager->ClaimResearchResults(character, QueueItemLockedMAM, rewardIndex)) {
+			rewardIndex++;
+		}
+		QueueItemLockedMAM = nullptr;
+		return;
+	}
+
+	if (RManager->CanResearchBeInitiated(QueueItemMAM))
 	{
-		const TArray<FItemAmount> Needed = GetMissingItems(QueItemMAM);
+		const TArray<FItemAmount> Needed = GetMissingItems(QueueItemMAM);
 		if (Needed.Num() == 0)
 		{
-			if (ResearchTreeParents.Contains(QueItemMAM))
+			if (ResearchTreeParents.Contains(QueueItemMAM))
 			{
-				RManager->InitiateResearch(mBufferInventory, QueItemMAM, *ResearchTreeParents.Find(QueItemMAM));
-				QueItemLockedMAM = QueItemMAM;
+				UE_LOG(LogNogsResearch, Display, TEXT("Initiated MAM research %s with stored items"), *QueueItemMAM);
+				RManager->InitiateResearch(mBufferInventoryMAM, QueueItemMAM, *ResearchTreeParents.Find(QueueItemMAM));
+				QueueItemLockedMAM = QueueItemMAM;
 				ReCalculateSciencePower();
-				QueueMAM.Remove(QueItemMAM);
-				QueItemMAM = nullptr;
+				QueueMAM.Remove(QueueItemMAM);
+				QueueItemMAM = nullptr;
 			}
 			return;
 		}
 
-		if (Researcher.IsValidIndex(Index))
+		if (BuiltResearchers.IsValidIndex(BuildingIterateIndexMAM))
 		{
-			if (Researcher[Index]->IsPendingKill())
+			if (BuiltResearchers[BuildingIterateIndexMAM]->IsPendingKill())
 			{
-				Researcher.Remove(Researcher[Index]);
+				BuiltResearchers.Remove(BuiltResearchers[BuildingIterateIndexMAM]);
 				return;
 			}
 
-			if (GrabItems(Researcher[Index]->GetStorageInventory(),QueItemMAM))
+			if (GrabItems(BuiltResearchers[BuildingIterateIndexMAM]->GetStorageInventory(), QueueItemMAM))
 			{
-				if (!ResearchTreeParents.Contains(QueItemMAM))
+				if (!ResearchTreeParents.Contains(QueueItemMAM))
 				{
-					// TODO add logging :Y
-					// should never happen tho :I
-					
+					UE_LOG(LogNogsResearch, Error, TEXT("ResearchTreeParents does not contain QueueItemMAM of %s"), *QueueItemMAM);
 				}
 				else
 				{
-					RManager->InitiateResearch(mBufferInventory, QueItemMAM, *ResearchTreeParents.Find(QueItemMAM));
-					QueItemLockedMAM = QueItemMAM;
+					UE_LOG(LogNogsResearch, Display, TEXT("Used items from researcher to initiate MAM research %s"), *QueueItemMAM);
+					RManager->InitiateResearch(mBufferInventoryMAM, QueueItemMAM, *ResearchTreeParents.Find(QueueItemMAM));
+					QueueItemLockedMAM = QueueItemMAM;
 					ReCalculateSciencePower();
-					QueueMAM.Remove(QueItemMAM);
-					QueItemMAM = nullptr;
+					QueueMAM.Remove(QueueItemMAM);
+					QueueItemMAM = nullptr;
 				}
 			}
 		}
-		else
-		{
-			Index = 0;
+		else {
+			BuildingIterateIndexMAM = 0;
 			return;
 		}
-		Index += 1;
+		BuildingIterateIndexMAM += 1;
 	}
 }
 
 
 void ANogsResearchSubsystem::TickSchematicResearch()
 {
-	if (!QueItem)
+	if (!QueueItemHUB) {
 		return;
-	if (SManager->GetActiveSchematic() != QueItem)
-	{
-		SManager->SetActiveSchematic(QueItem);
 	}
-	if (Researcher.IsValidIndex(IndexSchematic))
-	{
-		if (Researcher[IndexSchematic]->IsPendingKill())
+	if (SManager->GetActiveSchematic() != QueueItemHUB) {
+		UE_LOG(LogNogsResearch, Warning, TEXT("Set the Active Schematic to the QueueItem of %s"), *QueueItemHUB);
+		SManager->SetActiveSchematic(QueueItemHUB);
+	}
+	if (BuiltResearchers.IsValidIndex(BuildingIterateIndexHUB)) {
+		if (BuiltResearchers[BuildingIterateIndexHUB]->IsPendingKill())
 		{
 			// dont wanna crash here
-			Researcher.Remove(Researcher[IndexSchematic]);
+			BuiltResearchers.RemoveAt(BuildingIterateIndexHUB);
 			return;
 		}
 
-		const UFGSchematic* CDO = QueItem.GetDefaultObject();
-		if (SManager->IsSchematicPaidOff(QueItem) && CDO->mType != ESchematicType::EST_Alternate)
+		const UFGSchematic* CDO = QueueItemHUB.GetDefaultObject();
+		if (SManager->IsSchematicPaidOff(QueueItemHUB) && CDO->mType != ESchematicType::EST_Alternate)
 		{
 			SManager->LaunchShip();
-			QueItemLocked = QueItem;
+			QueueItemLockedHUB = QueueItemHUB;
 			ReCalculateSciencePower();
-			Queue.Remove(QueItem);
-			QueItem = nullptr;
+			UE_LOG(LogNogsResearch, Error, TEXT("Launched ship mShipLandTimeStamp: %f mShipLandTimeStampSave: %f"), SManager->mShipLandTimeStamp, SManager->mShipLandTimeStampSave);
+			SManager->mShipLandTimeStamp = SManager->mShipLandTimeStamp + 240;
+			UE_LOG(LogNogsResearch, Error, TEXT("Bumped Stamp mShipLandTimeStamp: %f mShipLandTimeStampSave: %f"), SManager->mShipLandTimeStamp, SManager->mShipLandTimeStampSave);
+			QueueHUB.Remove(QueueItemHUB);
+			QueueItemHUB = nullptr;
 			return;
 		}
 		else
 		{
-			if (GrabItems(Researcher[IndexSchematic]->GetStorageInventory(),QueItem))
+			// Not paid off yet (or alternate) so grab stuff
+			if (GrabItems(BuiltResearchers[BuildingIterateIndexHUB]->GetStorageInventory(), QueueItemHUB))
 			{
 				if (CDO->mType == ESchematicType::EST_Alternate)
 				{
-					TArray<FItemAmount> cost = GetMissingItems(QueItem);
+					TArray<FItemAmount> cost = GetMissingItems(QueueItemHUB);
 					if (cost.Num() == 0)
 					{
 						cost = CDO->mCost;
-						cost.Add(FItemAmount(AlternateRecipeCostDescriptor, 2));
+						cost.Add(FItemAmount(AlternateRecipeCostDescriptor, AlternateRecipeCostQuantity));
 
-						for (FItemAmount j : cost)
+						for (const FItemAmount j : cost)
 						{
 							if (j.Amount == 0)
 								continue;
-							mBufferInventory->Remove(j.ItemClass, j.Amount);
+							mBufferInventoryMAM->Remove(j.ItemClass, j.Amount);
 						}
 
-						SManager->GiveAccessToSchematic(QueItem, false);
-						QueItemLocked = QueItem;
+						UE_LOG(LogNogsResearch, Error, TEXT("Grab Items Succeed EST_Alternate route"));
+						SManager->GiveAccessToSchematic(QueueItemHUB, false);
+						QueueItemLockedHUB = QueueItemHUB;
 						ReCalculateSciencePower();
-						Queue.Remove(QueItem);
-						QueItem = nullptr;
+						QueueHUB.Remove(QueueItemHUB);
+						QueueItemHUB = nullptr;
 						return;
 					}
 				}
-				else if (SManager->IsSchematicPaidOff(QueItem))
+				else if (SManager->IsSchematicPaidOff(QueueItemHUB))
 				{
+					UE_LOG(LogNogsResearch, Error, TEXT("Grab Items Succeed Not EST_Alternate route"));
 					SManager->LaunchShip();
-					QueItemLocked = QueItem;
+					QueueItemLockedHUB = QueueItemHUB;
 					ReCalculateSciencePower();
-					Queue.Remove(QueItem);
-					QueItem = nullptr;
+					QueueHUB.Remove(QueueItemHUB);
+					QueueItemHUB = nullptr;
 				}
 			}
-		}	
+		}
 	}
 	else
 	{
-		IndexSchematic = 0;
+		BuildingIterateIndexHUB = 0;
 		return;
 	}
-	IndexSchematic += 1;
+	BuildingIterateIndexHUB += 1;
 }
 
 float ANogsResearchSubsystem::GetSchematicDurationAdjusted(TSubclassOf<class UFGSchematic> schematic) const
 {
-	if (!schematic)
+	if (!schematic) {
 		return 600.f;
+	}
 
 	const UFGSchematic* CDO = schematic.GetDefaultObject();
 	if (CDO->mType == ESchematicType::EST_Alternate)
@@ -577,25 +586,26 @@ float ANogsResearchSubsystem::GetSchematicDurationAdjusted(TSubclassOf<class UFG
 
 float ANogsResearchSubsystem::GetSchematicProgression(TSubclassOf<class UFGSchematic> schematic) const
 {
-	if (!schematic)
+	if (!schematic) {
 		return 600.f;
+	}
 	const UFGSchematic* CDO = schematic.GetDefaultObject();
 
 	if (CDO->mType == ESchematicType::EST_Alternate)
 	{
-		return ((CDO->mTimeToComplete + 300.f) - TimeSpent) - ((CDO->mTimeToComplete + 300.f) * GetTimeReductionFactor());
+		return ((CDO->mTimeToComplete + 300.f) - TimeSpentHUB) - ((CDO->mTimeToComplete + 300.f) * GetTimeReductionFactor());
 	}
-	else if(CDO->mType == ESchematicType::EST_MAM)
+	else if (CDO->mType == ESchematicType::EST_MAM)
 	{
 		return (CDO->mTimeToComplete - TimeSpentMAM) - (CDO->mTimeToComplete * GetTimeReductionFactor());
 	}
 	else
 	{
-		return (CDO->mTimeToComplete - TimeSpent) - (CDO->mTimeToComplete * GetTimeReductionFactor());
+		return (CDO->mTimeToComplete - TimeSpentHUB) - (CDO->mTimeToComplete * GetTimeReductionFactor());
 	}
 }
 
-bool ANogsResearchSubsystem::QueSchematic(TSubclassOf<class UFGSchematic> Schematic)
+bool ANogsResearchSubsystem::QueueSchematic(TSubclassOf<class UFGSchematic> Schematic)
 {
 	TArray< TSubclassOf< UFGSchematic >> AllSchematics;
 	TArray< TSubclassOf< UFGSchematic >> AllAviSchematics;
@@ -607,6 +617,7 @@ bool ANogsResearchSubsystem::QueSchematic(TSubclassOf<class UFGSchematic> Schema
 	{
 		if (Schematic.GetDefaultObject()->mType == ESchematicType::EST_MAM)
 		{
+			UE_LOG(LogNogsResearch, Display, TEXT("Added %s to MAM Queue"), *Schematic);
 			if (QueueMAM.Contains(Schematic))
 				return true;
 
@@ -615,47 +626,59 @@ bool ANogsResearchSubsystem::QueSchematic(TSubclassOf<class UFGSchematic> Schema
 		}
 		else
 		{
-			if (Queue.Contains(Schematic))
+			UE_LOG(LogNogsResearch, Display, TEXT("Added %s to HUB Queue"), *Schematic);
+			if (QueueHUB.Contains(Schematic))
 				return true;
 
-			Queue.Add(Schematic);
+			QueueHUB.Add(Schematic);
 			return true;
-		}	
+		}
 	}
 	return false;
 }
-bool ANogsResearchSubsystem::RemoveQueSchematic(TSubclassOf<class UFGSchematic> Schematic)
+
+bool ANogsResearchSubsystem::RemoveQueueSchematic(TSubclassOf<class UFGSchematic> Schematic)
 {
 	if (Schematic.GetDefaultObject()->mType == ESchematicType::EST_MAM)
 	{
 		if (QueueMAM.Contains(Schematic))
 		{
+			UE_LOG(LogNogsResearch, Display, TEXT("Removed %s from MAM Queue"), *Schematic);
 			QueueMAM.Remove(Schematic);
 			return true;
 		}
 	}
 	else
 	{
-		if (Queue.Contains(Schematic))
+		if (QueueHUB.Contains(Schematic))
 		{
-			Queue.Remove(Schematic);
+			UE_LOG(LogNogsResearch, Display, TEXT("Removed %s from HUB Queue"), *Schematic);
+			QueueHUB.Remove(Schematic);
 			return true;
 		}
 	}
+	UE_LOG(LogNogsResearch, Warning, TEXT("Failed to dequeue %s"), *Schematic);
 	return false;
 }
 
 float ANogsResearchSubsystem::GetTimeReductionFactor() const
 {
-	if (!ScienceTimeReductionCurve)
+	if (!ScienceTimeReductionCurve) {
 		return 0.f;
+	}
 	return ScienceTimeReductionCurve->GetFloatValue(TotalSciencePower);
 }
 
-bool ANogsResearchSubsystem::VerifyItem(TSubclassOf<UFGItemDescriptor> ItemClass, int32 Amount) const
+bool ANogsResearchSubsystem::VerifyMAMBufferItemTransfer(TSubclassOf<UFGItemDescriptor> ItemClass, int32 Amount) const
 {
-	if(QueItemMAM)
+	if (QueueItemMAM) {
 		return true;
-	else
+	}
+	else {
 		return false;
+	}
+}
+
+void ANogsResearchSubsystem::DumpMAMBufferToHUBTerminalGround_Implementation() {
+	UE_LOG(LogNogsResearch, Error, TEXT("No Cpp implementation yet for DumpMAMBufferToHUBTerminalGround"));
 }

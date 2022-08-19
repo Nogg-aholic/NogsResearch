@@ -1,5 +1,3 @@
-
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -40,8 +38,11 @@ public:
 		bool Registered;
 
 	UPROPERTY()
-	ANogsResearchSubsystem* SManager;;
+		ANogsResearchSubsystem* SManager;
 
 	UPROPERTY(BlueprintReadOnly)
-	UFGPipeConnectionComponent* Pipe;
+		UFGPipeConnectionComponent* Pipe;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
+		int32 ArbitraryStackSize = 500;
 };
