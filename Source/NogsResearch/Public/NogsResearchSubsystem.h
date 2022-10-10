@@ -97,8 +97,6 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 		void DumpMAMBufferToHUBTerminalGround();
 
-	virtual void DumpMAMBufferToHUBTerminalGround_Implementation();
-
 	// Add a Schematic to the Queue (either MAM or HUB, this will route it correctly)
 	UFUNCTION(BlueprintCallable)
 		bool QueueSchematic(TSubclassOf<class UFGSchematic> Schematic);

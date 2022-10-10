@@ -24,16 +24,69 @@ _This mod is currently being maintained by Robb#6731. Contact him if you want up
 
 ![ResearchAcceleratorArrayCoolWheelSpokeThing](https://i.imgur.com/btFKmZt.jpg)
 
-_Example Research Accelerator Setup_
+_Example Research Accelerator Setup by Robb_
 
 ## Getting Started
+
+You can install the mod at any point in your playthrough,
+but the earlier you add it,
+the more you'll be able to take advantage of the research-time-shortening feature.
 
 The HUB and MAM queueing functionality are available immediately upon installing the mod.
 You can queue milestones or nodes by dragging them into the queue, and they can be reordered the same way.
 
-You can unlock your first Researcher in Tier 0 of the HUB, which will allow automatic submission of items.
+### Researchers
 
-Fluid researchers are unlocked in Tier 3 of the HUB, which allows directly submitting Liquids and Gases toward research.
+In order to **automatically supply items to your research,**
+you must **construct Researcher buildings.**
+
+They require power to operate.
+Their power connectors allow more than one connection,
+so you can daisy-chain between Researcher machines.
+
+You can unlock your first Researcher in Tier 0 of the HUB.
+Depending on how you started your save file,
+it might already be unlocked for free.
+
+You can supply Researchers with items via belt,
+manually insert them at the building,
+or insert them remotely from the HUB terminal.
+
+Reseachers can store 500 of an item per slot,
+regardless of its normal stack size.
+Watch out - the base game does not expect slots to be this big.
+**Look at the tooltips for information on how to transfer items**
+**out of these slots without voiding some on accident.**
+
+Fluid Researchers are unlocked in Tier 3 of the HUB,
+which allows directly submitting Liquids and Gases toward research.
+Nog's Research adds a few Milestones that use fluids,
+but it is up to other mods to implement more fluid researches.
+
+### Science Power
+
+As you construct more Researchers,
+your Science Power will increase.
+
+**Science Power scales non-linearly with a reduction in how long research takes.**
+You can see how much Science Power you have,
+and how much it reduces the wait time,
+in the HUB UI.
+
+**This time reduction only applies to queued research!**
+
+The "delivery ship" will still return at its normal time,
+and the "Launch" button will not open until it returns,
+but queued research is allowed to start before the ship returns.
+
+### Research Accelerators
+
+Although Research Accelerators can't accept items from belts,
+they have a lot of internal inventory slots,
+and they contribute a lot of Science Power.
+
+They're useful for further boosting Science Power,
+and for storing uncommonly used items that you would otherwise end up submitting manually.
 
 ## Videos
 
@@ -43,7 +96,7 @@ Queue and Science Power demonstration
   <source src="https://cdn.discordapp.com/attachments/623891487683510323/1009984077916557362/FactoryGame-Win64-Shipping_0Kqgil1aOS.mp4" autoplay="false" controls="true" type="video/mp4">
 </video>
 
-(Outdated!) Spotlight videos by LK Aice:
+**(Outdated!)** Spotlight videos by LK Aice:
 
 [NogsResearch Mod ✪ Satisfactory ✪ English](https://youtu.be/Ahy-6HYhBPs)
 
@@ -53,7 +106,9 @@ Queue and Science Power demonstration
 
 Unfortunately, multiplayer compatibility still needs more work, but the mod **will work without crashing in multiplayer**.
 
-To summarize, clients can't easily manually submit items toward queued researches, but they can still view and edit the queue, as well as construct and operate the research buildings.
+To summarize, clients can't conveniently manually submit items toward queued researches,
+but they can still view and edit the queue,
+as well as construct and operate the research buildings.
 
 - Clients must interact with a researcher building in the world before they can remotely access its inventory from the HUB
 - Clients don't get accurate info on if researchers are out of power
@@ -79,4 +134,4 @@ Schematic Icon by [Lorc](http://lorcblog.blogspot.com/ "lorcblog") from [game-ic
 
 Mod Icon by Deantendo#4265
 
-<a target="_blank" href="https://icons8.com/icon/mISgYgMK6Z2X/hand-drag">Hand Drag</a> icon by <a target="_blank" href="https://icons8.com">Icons8</a>
+[Hand Drag](https://icons8.com/icon/mISgYgMK6Z2X/hand-drag) icon by [Icons8](https://icons8.com)

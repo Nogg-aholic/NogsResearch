@@ -365,7 +365,6 @@ void ANogsResearchSubsystem::UpdateMAMBufferFilters(bool dumpContents)
 	}
 	const TArray< FItemAmount > mamNodeCost = QueueItemMAM.GetDefaultObject()->mCost;
 	if (dumpContents) {
-		// mBufferInventoryMAM->Empty(); // TODO do something other than emptying the inventory here? dump items to world?
 		DumpMAMBufferToHUBTerminalGround();
 	}
 	mBufferInventoryMAM->Resize(FMath::Clamp(mamNodeCost.Num(), 1, 18));

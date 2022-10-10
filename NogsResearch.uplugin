@@ -1,14 +1,14 @@
 {
 	"FileVersion": 3,
-	"Version": 0,
-	"VersionName": "1.0.0",
-	"SemVersion": "1.0.0",
+	"Version": 1,
+	"VersionName": "1.0.3",
+	"SemVersion": "1.0.3",
 	"FriendlyName": "NogsResearch",
 	"Description": "Automated queueable research",
 	"Category": "Modding",
 	"CreatedBy": "Nog, Robb",
-	"CreatedByURL": "https://ficsit.app/mod/E2r37E5de1eiEZ",
-	"DocsURL": "",
+	"CreatedByURL": "https://ficsit.app/mod/NogsResearch",
+	"DocsURL": "https://ficsit.app/mod/NogsResearch",
 	"MarketplaceURL": "",
 	"SupportURL": "http://discord.gg/zqp6U7Y7Nu",
 	"CanContainContent": true,
@@ -31,12 +31,6 @@
 		{
 			"Name": "MAMTips",
 			"Enabled": true,
-			"SemVersion": ">=0.1.0"
-		},
-		{
-			"Name": "ContentInfo",
-			"Enabled": true,
-			"Optional": true,
 			"SemVersion": ">=0.1.0"
 		}
 	]
