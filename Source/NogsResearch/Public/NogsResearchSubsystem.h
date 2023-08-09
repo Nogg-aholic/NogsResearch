@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "FGSubsystem.h"
+#include "Subsystem/ModSubsystem.h"
 #include "FGSchematicManager.h"
 #include "Buildable/NogsBuildableResearcher.h"
 #include "FGResearchManager.h"
@@ -18,7 +19,7 @@
 
 
 UCLASS(Abstract, Blueprintable)
-class NOGSRESEARCH_API ANogsResearchSubsystem : public AFGSubsystem, public IFGSaveInterface
+class NOGSRESEARCH_API ANogsResearchSubsystem : public AModSubsystem, public IFGSaveInterface
 {
 	GENERATED_BODY()
 
@@ -71,7 +72,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Research")
 		float GetSchematicProgression(TSubclassOf<class UFGSchematic> schematic) const;
 
-	UFUNCTION(BlueprintPure, Category = "Research", DisplayName = "GetNogsResearchManager", Meta = (DefaultToSelf = "WorldContext"))
+	UFUNCTION(BlueprintPure, Category = "Research", DisplayName = "GetNogsResearchSubsystem", Meta = (DefaultToSelf = "WorldContext"))
 		static ANogsResearchSubsystem* Get(class UObject* WorldContext);
 
 protected:
@@ -162,6 +163,15 @@ public:
 	UPROPERTY(BlueprintReadWrite)
 		TMap<TSubclassOf<UFGSchematic>, TSubclassOf<UFGResearchTree>> ResearchTreeParents;
 
+	// Controls if the subsystem is allowed to submit items to schematics and launch ships.
+	// Submission is off at first load and spawn.
+	// This exists to purposely introduce delay, allowing other mods to make Game World CDOs 
+	// When the savegame system loads in the saved copy of the subsystem, it is ready earlier when the GameWorldModule would normally decide to spawn it.
+	UPROPERTY(BlueprintReadWrite)
+		bool EnableSubmitItems;
+
+	UPROPERTY(BlueprintReadWrite)
+		int MamBufferInventorySize;
 
 private:
 	// blanket check if an item can be put into the MAM buffer, the AllowedItemOnIndex and ArbitrarySlotSize set on each slot make it more specific

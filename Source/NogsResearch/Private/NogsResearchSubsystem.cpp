@@ -14,6 +14,9 @@ ANogsResearchSubsystem::ANogsResearchSubsystem() : Super() {
 	this->PrimaryActorTick.TickInterval = 0;
 	this->bAlwaysRelevant = true;
 	this->bReplicates = true;
+	
+	this->EnableSubmitItems = false;
+	this->MamBufferInventorySize = 18;
 }
 
 void ANogsResearchSubsystem::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -38,25 +41,23 @@ void ANogsResearchSubsystem::BeginPlay()
 
 	FString Name = TEXT("BufferInventory");
 
-	// if we dont exclude this for Editor we crash :( TODO doesn't seem to crash any more?
-//#if WITH_EDITOR
-//#else
 	if (HasAuthority()) {
 		if (!mBufferInventoryMAM) {
 			Name = Name.Append(GetName());
 			mBufferInventoryMAM = UFGInventoryLibrary::CreateInventoryComponent(this, *Name);
-			UE_LOG(LogNogsResearch, Warning, TEXT("Created MAM buffer inventory with name %s"), *Name);
+			UE_LOG(LogNogsResearchCpp, Warning, TEXT("Created MAM buffer inventory with name %s"), *Name);
 		}
 		else {
-			UE_LOG(LogNogsResearch, Display, TEXT("MAM buffer inventory already exists, has name %s"), *mBufferInventoryMAM->GetName());
+			UE_LOG(LogNogsResearchCpp, Display, TEXT("MAM buffer inventory already exists, has name %s"), *mBufferInventoryMAM->GetName());
 		}
 
+		const auto size = this->MamBufferInventorySize;
 		if (QueueItemMAM) {
 			UpdateMAMBufferFilters(false);
 		}
-		else if (mBufferInventoryMAM->GetSizeLinear() != 18) {
-			UE_LOG(LogNogsResearch, Display, TEXT("No QueueItemMAM so resizing inventory to 18"));
-			mBufferInventoryMAM->Resize(18);
+		else if (mBufferInventoryMAM->GetSizeLinear() != size) {
+			UE_LOG(LogNogsResearchCpp, Display, TEXT("Resizing MAM buffer inventory to %d"), size);
+			mBufferInventoryMAM->Resize(size);
 		}
 
 		/*for (int32 i = 0; i < mBufferInventoryMAM->mArbitrarySlotSizes.Num(); i++) {
@@ -65,7 +66,6 @@ void ANogsResearchSubsystem::BeginPlay()
 
 		mBufferInventoryMAM->mItemFilter.BindUFunction(this, "VerifyMAMBufferItemTransfer");
 	}
-//#endif
 
 	SManager = AFGSchematicManager::Get(GetWorld());
 	RManager = AFGResearchManager::Get(GetWorld());
@@ -75,19 +75,18 @@ void ANogsResearchSubsystem::BeginPlay()
 void ANogsResearchSubsystem::ReCalculateSciencePower()
 {
 	float Power = 0.f;
-	for (auto i : BuiltResearchers)
+	for (const auto researcher : BuiltResearchers)
 	{
-		if (!i || i->IsPendingKill())
+		if (!researcher || !IsValid(researcher))
 		{
-			BuiltResearchers.Remove(i);
+			BuiltResearchers.Remove(researcher);
 			ReCalculateSciencePower();
 			return;
 		}
-		Power += i->SciencePower;
+		Power += researcher->SciencePower;
 	}
 	TotalSciencePower = Power;
 }
-
 
 void ANogsResearchSubsystem::RegisterResearcher(ANogsBuildableResearcher* building)
 {
@@ -141,12 +140,12 @@ bool ANogsResearchSubsystem::GrabItems(UFGInventoryComponent* SourceInventory, T
 		return false;
 	}
 
-	TArray<FItemAmount> remainingCost = GetMissingItems(Schematic);
+	const TArray<FItemAmount> remainingCost = GetMissingItems(Schematic);
 	if (remainingCost.Num() == 0) {
 		return true;
 	}
 
-	for (FItemAmount costEntry : remainingCost) {
+	for (const FItemAmount costEntry : remainingCost) {
 		// if we have at least one of the requested remainingCost item
 		if (SourceInventory->HasItems(costEntry.ItemClass, 1)) {
 			// find out how many we actually have
@@ -155,7 +154,7 @@ bool ANogsResearchSubsystem::GrabItems(UFGInventoryComponent* SourceInventory, T
 
 			// set up this Stack for transfer
 			FInventoryStack stack = FInventoryStack();
-			stack.Item.ItemClass = costEntry.ItemClass;
+			stack.Item.SetItemClass(costEntry.ItemClass);
 			stack.NumItems = quantityPresent;
 
 			if (Schematic.GetDefaultObject()->mType == ESchematicType::EST_MAM || Schematic.GetDefaultObject()->mType == ESchematicType::EST_Alternate) {
@@ -169,7 +168,7 @@ bool ANogsResearchSubsystem::GrabItems(UFGInventoryComponent* SourceInventory, T
 				// Schematic costs are paid off via PayOffOnSchematic
 				// we dont need to recheck again for what remainingCost is left since this loop is on a descriptor basis and there are no 0 amounts 
 				TArray<FItemAmount> payoffArray;
-				FItemAmount submission = FItemAmount(stack.Item.ItemClass, quantityPresent);
+				FItemAmount submission = FItemAmount(stack.Item.GetItemClass(), quantityPresent);
 				payoffArray.Add(submission);
 				if (SManager->PayOffOnSchematic(Schematic, payoffArray)) {
 					SourceInventory->Remove(costEntry.ItemClass, quantityPresent);
@@ -186,15 +185,80 @@ bool ANogsResearchSubsystem::GrabItems(UFGInventoryComponent* SourceInventory, T
 
 }
 
+bool DecideTickHUBSchematic(ESchematicType type) {
+	switch (type)
+	{
+	case ESchematicType::EST_Custom:
+	{
+		return true;
+	}
+	case ESchematicType::EST_Cheat:
+	{
+		return true;
+	}
+	case ESchematicType::EST_Tutorial:
+	{
+		return true;
+	}
+	case ESchematicType::EST_Milestone:
+	{
+		return true;
+	}
+	case ESchematicType::EST_Alternate:
+	{
+		return true;
+	}
+	case ESchematicType::EST_Story:
+	{
+		return true;
+	}
+	case ESchematicType::EST_MAM:
+	{
+		// Handled by MAM section
+		return false;
+	}
+	case ESchematicType::EST_ResourceSink:
+	{
+		// even worth it?
+		return false;
+	}
+	case ESchematicType::EST_HardDrive:
+	{
+		return false;
+		// not used 
+	}
+	default:
+	{
+		UE_LOG(LogNogsResearchCpp, Warning, TEXT("Unknown QueueItemHUB schematic type %s"), *UEnum::GetValueAsString(type));
+	}
+	}
+	return false;
+}
+
+bool DecideTickMAMSchematic(ESchematicType type) {
+	if (type == ESchematicType::EST_MAM) {
+		return true;
+	}
+	UE_LOG(LogNogsResearchCpp, Warning, TEXT("Unknown QueueItemMAM schematic type %s"), *UEnum::GetValueAsString(type));
+	return false;
+}
 
 void ANogsResearchSubsystem::Tick(float dt)
 {
+	Super::Tick(dt);
+
+	UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("Tick time %f"), dt);
 	if (!HasAuthority()) {
+		// UE_LOG(LogNogsResearchCpp, Log, TEXT("NoAuthority"));
+		return;
+	}
+	if (!EnableSubmitItems) {
+		UE_LOG(LogNogsResearchLoopDebugging, Warning, TEXT("NogsResearch item submission not allowed yet, blocked by EnableSubmitItems flag"));
 		return;
 	}
 	if (BuiltResearchers.Contains(nullptr))
 	{
-		// researchers deleting themselfs are cleared here
+		// researchers deleting themselves are cleared here
 		BuiltResearchers.Remove(nullptr);
 	}
 
@@ -208,72 +272,31 @@ void ANogsResearchSubsystem::Tick(float dt)
 				{
 					QueueItemHUB = QueueHUB[0];
 					QueueHUB.RemoveAt(0);
-					UE_LOG(LogNogsResearch, Display, TEXT("QueueItemHUB became %s"), *QueueItemHUB);
+					UE_LOG(LogNogsResearchCpp, Display, TEXT("QueueItemHUB became %s"), *QueueItemHUB->GetClass()->GetName());
 				}
+			} else {
+				UE_LOG(LogNogsResearchLoopDebugging, Display, TEXT("QueueHUB is empty, nothing to place at front of queue"));
 			}
 		}
 		else
 		{
-			switch (QueueItemHUB.GetDefaultObject()->mType)
-			{
-			case ESchematicType::EST_Custom:
-			{
+			if (DecideTickHUBSchematic(QueueItemHUB.GetDefaultObject()->mType)) {
 				TickSchematicResearch();
-				break;
-			}
-			case ESchematicType::EST_Cheat:
-			{
-				TickSchematicResearch();
-				break;
-			}
-			case ESchematicType::EST_Tutorial:
-			{
-				TickSchematicResearch();
-				break;
-			}
-			case ESchematicType::EST_Milestone:
-			{
-				TickSchematicResearch();
-				break;
-			}
-			case ESchematicType::EST_Alternate:
-			{
-				TickSchematicResearch();
-
-				break;
-			}
-			case ESchematicType::EST_Story:
-			{
-				TickSchematicResearch();
-				break;
-			}
-			case ESchematicType::EST_MAM:
-			{
-				// Handled by MAM section of this function
-				break;
-			}
-			case ESchematicType::EST_ResourceSink:
-			{
-				// even worth it?
-				break;
-			}
-			case ESchematicType::EST_HardDrive:
-			{
-				break;
-				// not used 
-			}
-			default: break;
+			} else {
+				UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("No TickSchematicResearch"));
 			}
 		}
 
 	}
 	else if (GetSchematicProgression(QueueItemLockedHUB) <= 0)
 	{
+		UE_LOG(LogNogsResearchCpp, Display, TEXT("Completed QueueItemLockedHUB: %s"), *QueueItemLockedHUB->GetClass()->GetName());
 		QueueItemLockedHUB = nullptr;
 		TimeSpentHUB = 0.f;
 	}
 	else
 	{
+		UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("Waiting out HUB timer for '%s'"), *QueueItemLockedHUB->GetClass()->GetName());
 		TimeSpentHUB += dt;
 	}
 
@@ -287,72 +310,27 @@ void ANogsResearchSubsystem::Tick(float dt)
 				{
 					QueueItemMAM = QueueMAM[0];
 					QueueMAM.RemoveAt(0);
-					UE_LOG(LogNogsResearch, Display, TEXT("QueueItemMAM became %s, so dumping contents and resizing"), *QueueItemMAM);
+					UE_LOG(LogNogsResearchCpp, Display, TEXT("QueueItemMAM became '%s', so dumping contents and resizing"), *QueueItemMAM->GetClass()->GetName());
 					UpdateMAMBufferFilters(true);
 				}
 			}
 		}
 		else {
-			switch (QueueItemMAM.GetDefaultObject()->mType)
-			{
-			case ESchematicType::EST_Custom:
-			{
-				// Handled by HUB section
-				break;
-			}
-			case ESchematicType::EST_Cheat:
-			{
-				// Handled by HUB section
-				break;
-			}
-			case ESchematicType::EST_Tutorial:
-			{
-				// Handled by HUB section
-				break;
-			}
-			case ESchematicType::EST_Milestone:
-			{
-				// Handled by HUB section
-				break;
-			}
-			case ESchematicType::EST_Alternate:
-			{
-				// Handled by HUB section
-				break;
-			}
-			case ESchematicType::EST_Story:
-			{
-				// Handled by HUB section
-				break;
-			}
-			case ESchematicType::EST_MAM:
-			{
+			if (DecideTickMAMSchematic(QueueItemMAM.GetDefaultObject()->mType)) {
 				TickMAMResearch();
-				break;
 			}
-			case ESchematicType::EST_ResourceSink:
-			{
-				break;
-			}
-			case ESchematicType::EST_HardDrive:
-			{
-				break;
-			}
-			default: break;
-			}
-
 		}
 	}
 	else if (GetSchematicProgression(QueueItemLockedMAM) <= 0)
 	{
-		// RManager->OnResearchTimerCompleteAccessor(QueueItemLockedMAM);
-		UE_LOG(LogNogsResearch, Display, TEXT("Completed QueueItemLockedMAM: %s"), *QueueItemLockedMAM);
+		UE_LOG(LogNogsResearchCpp, Display, TEXT("Completed QueueItemLockedMAM: %s"), *QueueItemLockedMAM->GetClass()->GetName());
 		RManager->OnResearchTimerComplete(QueueItemLockedMAM);
 		QueueItemLockedMAM = nullptr;
 		TimeSpentMAM = 0.f;
 	}
 	else
 	{
+		UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("Waiting out MAM timer for '%s'"), *QueueItemLockedMAM->GetClass()->GetName());
 		TimeSpentMAM += dt;
 	}
 }
@@ -360,7 +338,6 @@ void ANogsResearchSubsystem::Tick(float dt)
 void ANogsResearchSubsystem::UpdateMAMBufferFilters(bool dumpContents)
 {
 	if (!QueueItemMAM) {
-		UE_LOG(LogNogsResearch, Warning, TEXT("Completed QueueItemLockedMAM: %s"), *QueueItemLockedMAM);
 		return;
 	}
 	const TArray< FItemAmount > mamNodeCost = QueueItemMAM.GetDefaultObject()->mCost;
@@ -379,17 +356,18 @@ void ANogsResearchSubsystem::UpdateMAMBufferFilters(bool dumpContents)
 
 TArray<FItemAmount> ANogsResearchSubsystem::GetMissingItems(TSubclassOf< class UFGSchematic > Schematic) const
 {
-	TArray<FItemAmount> cost;
+	TArray<FItemAmount> calculateCost;
 	const UFGSchematic* CDO = Schematic.GetDefaultObject();
 	if (CDO->mType == ESchematicType::EST_MAM) {
-		cost = CDO->mCost;
+		// MAM items get submitted in one go
+		calculateCost = CDO->mCost;
 	}
 	else if (CDO->mType == ESchematicType::EST_Alternate) {
 		// Cost is usually empty here ..
-		// we are adding 2 Hard Drives as additional Cost
+		// add some additional Cost
 		// this gets quite complicated later on since we use this function to get only what we dont have already
-		cost = CDO->mCost;
-		cost.Add(FItemAmount(AlternateRecipeCostDescriptor, AlternateRecipeCostQuantity));
+		calculateCost = CDO->mCost;
+		calculateCost.Add(FItemAmount(AlternateRecipeCostDescriptor, AlternateRecipeCostQuantity));
 	}
 	else {
 		return SManager->GetRemainingCostFor(Schematic);
@@ -397,7 +375,7 @@ TArray<FItemAmount> ANogsResearchSubsystem::GetMissingItems(TSubclassOf< class U
 
 	// needs further processing
 	// check the buffer inventory for items we already have and can subtract from what we need
-	for (FItemAmount& itemAmount : cost) {
+	for (FItemAmount& itemAmount : calculateCost) {
 		if (itemAmount.Amount == 0) {
 			continue;
 		}
@@ -409,14 +387,13 @@ TArray<FItemAmount> ANogsResearchSubsystem::GetMissingItems(TSubclassOf< class U
 	}
 
 	TArray<FItemAmount> CostOut;
-	for (FItemAmount itemAmount : cost) {
+	for (FItemAmount itemAmount : calculateCost) {
 		if (itemAmount.Amount > 0) {
 			CostOut.Add(itemAmount);
 		}
 	}
 	return CostOut;
 }
-
 
 void ANogsResearchSubsystem::TickMAMResearch()
 {
@@ -425,7 +402,7 @@ void ANogsResearchSubsystem::TickMAMResearch()
 	}
 
 	if (RManager->IsResearchComplete(QueueItemLockedMAM)) {
-		UE_LOG(LogNogsResearch, Display, TEXT("Awarding rewards for MAM research %s"), *QueueItemLockedMAM);
+		UE_LOG(LogNogsResearchCpp, Display, TEXT("Awarding rewards for MAM research %s"), *QueueItemLockedMAM->GetClass()->GetName());
 		TArray< TSubclassOf< UFGSchematic > > arr;
 		int32 rewardIndex = 0;
 		AFGCharacterPlayer* character = Cast<AFGCharacterPlayer>(GetInstigator());
@@ -443,7 +420,7 @@ void ANogsResearchSubsystem::TickMAMResearch()
 		{
 			if (ResearchTreeParents.Contains(QueueItemMAM))
 			{
-				UE_LOG(LogNogsResearch, Display, TEXT("Initiated MAM research %s with stored items"), *QueueItemMAM);
+				UE_LOG(LogNogsResearchCpp, Display, TEXT("Initiated MAM research %s with stored items"), *QueueItemMAM->GetClass()->GetName());
 				RManager->InitiateResearch(mBufferInventoryMAM, QueueItemMAM, *ResearchTreeParents.Find(QueueItemMAM));
 				QueueItemLockedMAM = QueueItemMAM;
 				ReCalculateSciencePower();
@@ -455,21 +432,22 @@ void ANogsResearchSubsystem::TickMAMResearch()
 
 		if (BuiltResearchers.IsValidIndex(BuildingIterateIndexMAM))
 		{
-			if (BuiltResearchers[BuildingIterateIndexMAM]->IsPendingKill())
+			const auto researcher = BuiltResearchers[BuildingIterateIndexMAM];
+			if (!IsValid(researcher))
 			{
-				BuiltResearchers.Remove(BuiltResearchers[BuildingIterateIndexMAM]);
+				BuiltResearchers.Remove(researcher);
 				return;
 			}
 
-			if (GrabItems(BuiltResearchers[BuildingIterateIndexMAM]->GetStorageInventory(), QueueItemMAM))
+			if (GrabItems(researcher->GetStorageInventory(), QueueItemMAM))
 			{
 				if (!ResearchTreeParents.Contains(QueueItemMAM))
 				{
-					UE_LOG(LogNogsResearch, Error, TEXT("ResearchTreeParents does not contain QueueItemMAM of %s"), *QueueItemMAM);
+					UE_LOG(LogNogsResearchCpp, Error, TEXT("ResearchTreeParents does not contain QueueItemMAM of %s"), *QueueItemMAM->GetClass()->GetName());
 				}
 				else
 				{
-					UE_LOG(LogNogsResearch, Display, TEXT("Used items from researcher to initiate MAM research %s"), *QueueItemMAM);
+					UE_LOG(LogNogsResearchCpp, Display, TEXT("Used items from researcher to initiate MAM research %s"), *QueueItemMAM->GetClass()->GetName());
 					RManager->InitiateResearch(mBufferInventoryMAM, QueueItemMAM, *ResearchTreeParents.Find(QueueItemMAM));
 					QueueItemLockedMAM = QueueItemMAM;
 					ReCalculateSciencePower();
@@ -486,21 +464,29 @@ void ANogsResearchSubsystem::TickMAMResearch()
 	}
 }
 
-
 void ANogsResearchSubsystem::TickSchematicResearch()
 {
+	UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("TickSchematicResearch building index %d"), BuildingIterateIndexHUB);
 	if (!QueueItemHUB) {
 		return;
 	}
 	if (SManager->GetActiveSchematic() != QueueItemHUB) {
-		UE_LOG(LogNogsResearch, Warning, TEXT("Set the Active Schematic to the QueueItem of %s"), *QueueItemHUB);
+		UE_LOG(LogNogsResearchCpp, Warning, TEXT("Set the Active Schematic to the QueueItem of %s"), *QueueItemHUB->GetClass()->GetName());
 		SManager->SetActiveSchematic(QueueItemHUB);
 	}
 	if (BuiltResearchers.IsValidIndex(BuildingIterateIndexHUB)) {
-		if (BuiltResearchers[BuildingIterateIndexHUB]->IsPendingKill())
+		const auto building = BuiltResearchers[BuildingIterateIndexHUB];
+		if (!IsValid(building))
 		{
-			// dont wanna crash here
+			// don't wanna crash here
 			BuiltResearchers.RemoveAt(BuildingIterateIndexHUB);
+			return;
+		}
+
+		// Update buildings that may have been missed when ex. NoPower cheat changes
+		building->CheckPower();
+		if (!building->Registered) {
+			UE_LOG(LogNogsResearchLoopDebugging, Warning, TEXT("Researcher %s no longer registered after power update, skipping this tick"), *GetName());
 			return;
 		}
 
@@ -510,9 +496,9 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 			SManager->LaunchShip();
 			QueueItemLockedHUB = QueueItemHUB;
 			ReCalculateSciencePower();
-			UE_LOG(LogNogsResearch, Error, TEXT("Launched ship mShipLandTimeStamp: %f mShipLandTimeStampSave: %f"), SManager->mShipLandTimeStamp, SManager->mShipLandTimeStampSave);
+			UE_LOG(LogNogsResearchLoopDebugging, Error, TEXT("Launched ship mShipLandTimeStamp: %f mShipLandTimeStampSave: %f"), SManager->mShipLandTimeStamp, SManager->mShipLandTimeStampSave);
 			SManager->mShipLandTimeStamp = SManager->mShipLandTimeStamp + 240;
-			UE_LOG(LogNogsResearch, Error, TEXT("Bumped Stamp mShipLandTimeStamp: %f mShipLandTimeStampSave: %f"), SManager->mShipLandTimeStamp, SManager->mShipLandTimeStampSave);
+			UE_LOG(LogNogsResearchLoopDebugging, Error, TEXT("Bumped Stamp mShipLandTimeStamp: %f mShipLandTimeStampSave: %f"), SManager->mShipLandTimeStamp, SManager->mShipLandTimeStampSave);
 			QueueHUB.Remove(QueueItemHUB);
 			QueueItemHUB = nullptr;
 			return;
@@ -520,7 +506,7 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 		else
 		{
 			// Not paid off yet (or alternate) so grab stuff
-			if (GrabItems(BuiltResearchers[BuildingIterateIndexHUB]->GetStorageInventory(), QueueItemHUB))
+			if (GrabItems(building->GetStorageInventory(), QueueItemHUB))
 			{
 				if (CDO->mType == ESchematicType::EST_Alternate)
 				{
@@ -537,8 +523,8 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 							mBufferInventoryMAM->Remove(j.ItemClass, j.Amount);
 						}
 
-						UE_LOG(LogNogsResearch, Error, TEXT("Grab Items Succeed EST_Alternate route"));
-						SManager->GiveAccessToSchematic(QueueItemHUB, false);
+						UE_LOG(LogNogsResearchCpp, Log, TEXT("Grab Items Succeed EST_Alternate route"));
+						SManager->GiveAccessToSchematic(QueueItemHUB, nullptr);
 						QueueItemLockedHUB = QueueItemHUB;
 						ReCalculateSciencePower();
 						QueueHUB.Remove(QueueItemHUB);
@@ -548,7 +534,7 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 				}
 				else if (SManager->IsSchematicPaidOff(QueueItemHUB))
 				{
-					UE_LOG(LogNogsResearch, Error, TEXT("Grab Items Succeed Not EST_Alternate route"));
+					UE_LOG(LogNogsResearchCpp, Log, TEXT("Grab Items Succeed Not EST_Alternate route"));
 					SManager->LaunchShip();
 					QueueItemLockedHUB = QueueItemHUB;
 					ReCalculateSciencePower();
@@ -557,13 +543,13 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 				}
 			}
 		}
-	}
-	else
-	{
+	} else {
+		UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("Index %d is not valid, returning back to start of building loop"), BuildingIterateIndexHUB);
 		BuildingIterateIndexHUB = 0;
 		return;
 	}
 	BuildingIterateIndexHUB += 1;
+	UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("Increased building loop to %d"), BuildingIterateIndexHUB);
 }
 
 float ANogsResearchSubsystem::GetSchematicDurationAdjusted(TSubclassOf<class UFGSchematic> schematic) const
@@ -616,7 +602,7 @@ bool ANogsResearchSubsystem::QueueSchematic(TSubclassOf<class UFGSchematic> Sche
 	{
 		if (Schematic.GetDefaultObject()->mType == ESchematicType::EST_MAM)
 		{
-			UE_LOG(LogNogsResearch, Display, TEXT("Added %s to MAM Queue"), *Schematic);
+			UE_LOG(LogNogsResearchCpp, Display, TEXT("Added %s to MAM Queue"), *Schematic);
 			if (QueueMAM.Contains(Schematic))
 				return true;
 
@@ -625,7 +611,7 @@ bool ANogsResearchSubsystem::QueueSchematic(TSubclassOf<class UFGSchematic> Sche
 		}
 		else
 		{
-			UE_LOG(LogNogsResearch, Display, TEXT("Added %s to HUB Queue"), *Schematic);
+			UE_LOG(LogNogsResearchCpp, Display, TEXT("Added %s to HUB Queue"), *Schematic);
 			if (QueueHUB.Contains(Schematic))
 				return true;
 
@@ -642,7 +628,7 @@ bool ANogsResearchSubsystem::RemoveQueueSchematic(TSubclassOf<class UFGSchematic
 	{
 		if (QueueMAM.Contains(Schematic))
 		{
-			UE_LOG(LogNogsResearch, Display, TEXT("Removed %s from MAM Queue"), *Schematic);
+			UE_LOG(LogNogsResearchCpp, Display, TEXT("Removed %s from MAM Queue"), *Schematic);
 			QueueMAM.Remove(Schematic);
 			return true;
 		}
@@ -651,12 +637,12 @@ bool ANogsResearchSubsystem::RemoveQueueSchematic(TSubclassOf<class UFGSchematic
 	{
 		if (QueueHUB.Contains(Schematic))
 		{
-			UE_LOG(LogNogsResearch, Display, TEXT("Removed %s from HUB Queue"), *Schematic);
+			UE_LOG(LogNogsResearchCpp, Display, TEXT("Removed %s from HUB Queue"), *Schematic);
 			QueueHUB.Remove(Schematic);
 			return true;
 		}
 	}
-	UE_LOG(LogNogsResearch, Warning, TEXT("Failed to dequeue %s"), *Schematic);
+	UE_LOG(LogNogsResearchCpp, Warning, TEXT("Failed to dequeue %s"), *Schematic);
 	return false;
 }
 
@@ -672,12 +658,11 @@ bool ANogsResearchSubsystem::VerifyMAMBufferItemTransfer(TSubclassOf<UFGItemDesc
 {
 	if (QueueItemMAM) {
 		return true;
-	}
-	else {
+	} else {
 		return false;
 	}
 }
 
 void ANogsResearchSubsystem::DumpMAMBufferToHUBTerminalGround_Implementation() {
-	UE_LOG(LogNogsResearch, Error, TEXT("No Cpp implementation yet for DumpMAMBufferToHUBTerminalGround"));
+	UE_LOG(LogNogsResearchCpp, Error, TEXT("No Cpp implementation yet for DumpMAMBufferToHUBTerminalGround"));
 }

@@ -5,7 +5,9 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
-DECLARE_LOG_CATEGORY_EXTERN(LogNogsResearch, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(LogNogsResearchCpp, Log, All);
+
+DECLARE_LOG_CATEGORY_EXTERN(LogNogsResearchLoopDebugging, Log, Error);
 
 class FNogsResearchModule : public IModuleInterface
 {

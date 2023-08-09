@@ -121,6 +121,7 @@ as well as construct and operate the research buildings.
 - Fluid Researchers will not graphically update their displayed fluid count (in response to being taken by the research system) until fluid flow changes or they are interacted with.
 - It's possible to get duplicate entries in the queues by reordering items. They should correct themselves as researches complete.
 - Schematic Dependency Tree viewing in the HUB is inconsistent, but vanilla and modded schematics very rarely use this feature regardless.
+- Adding and removing items from the queue in a specific order can bypass MAM research tree dependencies
 
 ## Credits
 

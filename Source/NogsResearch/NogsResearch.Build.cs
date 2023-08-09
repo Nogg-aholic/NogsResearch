@@ -2,7 +2,11 @@
 
 using UnrealBuildTool;
 using System.IO;
-using Tools.DotNETCommon;
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using EpicGames.Core;
+// using Tools.DotNETCommon;
 
 public class NogsResearch : ModuleRules
 {
@@ -11,16 +15,15 @@ public class NogsResearch : ModuleRules
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
 		var factoryGamePchPath = new DirectoryReference(Path.Combine(Target.ProjectFile.Directory.ToString(), "Source", "FactoryGame", "Public", "FactoryGame.h"));
-        PrivatePCHHeaderFile = factoryGamePchPath.MakeRelativeTo(new DirectoryReference(ModuleDirectory));
+		PrivatePCHHeaderFile = factoryGamePchPath.MakeRelativeTo(new DirectoryReference(ModuleDirectory));
 
-        PublicDependencyModuleNames.AddRange(
+		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"Core", "CoreUObject",
-	            "Engine",
-	            "InputCore","UMG",
-				"FactoryGame", "SML"
-				// ... add other public dependencies that you statically link with here ...
+				"Core", "CoreUObject","Engine","InputCore","UMG",
+				"SML",
+				"FactoryGame"
+				// ... add private dependencies that you statically link with here ...	
 			}
 			);
 	}

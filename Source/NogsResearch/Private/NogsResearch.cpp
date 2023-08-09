@@ -6,7 +6,9 @@
 
 DEFINE_LOG_CATEGORY(LogGame);
 
-DEFINE_LOG_CATEGORY(LogNogsResearch);
+DEFINE_LOG_CATEGORY(LogNogsResearchCpp);
+
+DEFINE_LOG_CATEGORY(LogNogsResearchLoopDebugging);
 
 void FNogsResearchModule::StartupModule()
 {
