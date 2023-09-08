@@ -135,4 +135,7 @@ void ANogsBuildableResearcher::Factory_Tick(float dt)
 	}
 }
 
-
+// Required for the researcher building to be able to accept items via belt
+bool ANogsBuildableResearcher::CanProduce_Implementation() const {
+	return HasPower();
+}

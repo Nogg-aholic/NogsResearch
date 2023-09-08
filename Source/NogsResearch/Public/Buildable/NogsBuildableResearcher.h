@@ -45,4 +45,6 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 		int32 ArbitraryStackSize = 500;
+
+	virtual bool CanProduce_Implementation() const override;
 };
