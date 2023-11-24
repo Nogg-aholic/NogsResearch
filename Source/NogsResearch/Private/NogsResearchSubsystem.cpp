@@ -1,4 +1,7 @@
 #include "NogsResearchSubsystem.h"
+
+#include "Net/UnrealNetwork.h"
+
 #include "NogsResearch.h"
 #include "FactoryGame.h"
 

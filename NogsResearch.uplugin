@@ -1,8 +1,8 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.4.0",
-	"SemVersion": "1.4.0",
+	"VersionName": "1.4.2",
+	"SemVersion": "1.4.2",
 	"FriendlyName": "Nog's Automated Research",
 	"Description": "Queue and automate HUB and MAM research!",
 	"Category": "Modding",
@@ -26,12 +26,12 @@
 		{
 			"Name": "SML",
 			"Enabled": true,
-			"SemVersion": "^3.5.1"
+			"SemVersion": "^3.6.0"
 		},
 		{
 			"Name": "MAMTips",
 			"Enabled": true,
-			"SemVersion": ">=1.3.1"
+			"SemVersion": ">=1.3.2"
 		}
 	]
 }

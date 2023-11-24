@@ -4,8 +4,6 @@
 
 #define LOCTEXT_NAMESPACE "FNogsResearchModule"
 
-DEFINE_LOG_CATEGORY(LogGame);
-
 DEFINE_LOG_CATEGORY(LogNogsResearchCpp);
 
 DEFINE_LOG_CATEGORY(LogNogsResearchLoopDebugging);
