@@ -149,7 +149,7 @@ public:
 		int32 TotalSciencePower;
 
 	// Curve to use with Science Points to calculate time reduction
-	UPROPERTY(SaveGame, EditDefaultsOnly, BlueprintReadWrite)
+	UPROPERTY(SaveGame, EditDefaultsOnly, BlueprintReadWrite, Replicated)
 		UCurveFloat* ScienceTimeReductionCurve;
 
 	// Item to use as the cost for alternate recipes (since they don't have a cost normally)

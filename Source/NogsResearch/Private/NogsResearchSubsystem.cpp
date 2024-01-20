@@ -275,7 +275,7 @@ void ANogsResearchSubsystem::Tick(float dt)
 				{
 					QueueItemHUB = QueueHUB[0];
 					QueueHUB.RemoveAt(0);
-					UE_LOG(LogNogsResearchCpp, Display, TEXT("QueueItemHUB became %s"), *QueueItemHUB->GetClass()->GetName());
+					UE_LOG(LogNogsResearchCpp, Display, TEXT("QueueItemHUB became %s"), *UKismetSystemLibrary::GetDisplayName(QueueItemHUB));
 				}
 			} else {
 				UE_LOG(LogNogsResearchLoopDebugging, Display, TEXT("QueueHUB is empty, nothing to place at front of queue"));
@@ -293,13 +293,13 @@ void ANogsResearchSubsystem::Tick(float dt)
 	}
 	else if (GetSchematicProgression(QueueItemLockedHUB) <= 0)
 	{
-		UE_LOG(LogNogsResearchCpp, Display, TEXT("Completed QueueItemLockedHUB: %s"), *QueueItemLockedHUB->GetClass()->GetName());
+		UE_LOG(LogNogsResearchCpp, Display, TEXT("Completed QueueItemLockedHUB: %s"), *UKismetSystemLibrary::GetDisplayName(QueueItemLockedHUB));
 		QueueItemLockedHUB = nullptr;
 		TimeSpentHUB = 0.f;
 	}
 	else
 	{
-		UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("Waiting out HUB timer for '%s'"), *QueueItemLockedHUB->GetClass()->GetName());
+		UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("Waiting out HUB timer for '%s'"), *UKismetSystemLibrary::GetDisplayName(QueueItemLockedHUB));
 		TimeSpentHUB += dt;
 	}
 
@@ -313,7 +313,7 @@ void ANogsResearchSubsystem::Tick(float dt)
 				{
 					QueueItemMAM = QueueMAM[0];
 					QueueMAM.RemoveAt(0);
-					UE_LOG(LogNogsResearchCpp, Display, TEXT("QueueItemMAM became '%s', so dumping contents and resizing"), *QueueItemMAM->GetClass()->GetName());
+					UE_LOG(LogNogsResearchCpp, Display, TEXT("QueueItemMAM became '%s', so dumping contents and resizing"), *UKismetSystemLibrary::GetDisplayName(QueueItemMAM));
 					UpdateMAMBufferFilters(true);
 				}
 			}
@@ -326,14 +326,14 @@ void ANogsResearchSubsystem::Tick(float dt)
 	}
 	else if (GetSchematicProgression(QueueItemLockedMAM) <= 0)
 	{
-		UE_LOG(LogNogsResearchCpp, Display, TEXT("Completed QueueItemLockedMAM: %s"), *QueueItemLockedMAM->GetClass()->GetName());
+		UE_LOG(LogNogsResearchCpp, Display, TEXT("Completed QueueItemLockedMAM: %s"), *UKismetSystemLibrary::GetDisplayName(QueueItemLockedMAM));
 		RManager->OnResearchTimerComplete(QueueItemLockedMAM);
 		QueueItemLockedMAM = nullptr;
 		TimeSpentMAM = 0.f;
 	}
 	else
 	{
-		UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("Waiting out MAM timer for '%s'"), *QueueItemLockedMAM->GetClass()->GetName());
+		UE_LOG(LogNogsResearchLoopDebugging, Log, TEXT("Waiting out MAM timer for '%s'"), *UKismetSystemLibrary::GetDisplayName(QueueItemLockedMAM));
 		TimeSpentMAM += dt;
 	}
 }
@@ -405,7 +405,7 @@ void ANogsResearchSubsystem::TickMAMResearch()
 	}
 
 	if (RManager->IsResearchComplete(QueueItemLockedMAM)) {
-		UE_LOG(LogNogsResearchCpp, Display, TEXT("Awarding rewards for MAM research %s"), *QueueItemLockedMAM->GetClass()->GetName());
+		UE_LOG(LogNogsResearchCpp, Display, TEXT("Awarding rewards for MAM research %s"), *UKismetSystemLibrary::GetDisplayName(QueueItemLockedMAM));
 		TArray< TSubclassOf< UFGSchematic > > arr;
 		int32 rewardIndex = 0;
 		AFGCharacterPlayer* character = Cast<AFGCharacterPlayer>(GetInstigator());
@@ -423,7 +423,7 @@ void ANogsResearchSubsystem::TickMAMResearch()
 		{
 			if (ResearchTreeParents.Contains(QueueItemMAM))
 			{
-				UE_LOG(LogNogsResearchCpp, Display, TEXT("Initiated MAM research %s with stored items"), *QueueItemMAM->GetClass()->GetName());
+				UE_LOG(LogNogsResearchCpp, Display, TEXT("Initiated MAM research %s with stored items"), *UKismetSystemLibrary::GetDisplayName(QueueItemMAM));
 				RManager->InitiateResearch(mBufferInventoryMAM, QueueItemMAM, *ResearchTreeParents.Find(QueueItemMAM));
 				QueueItemLockedMAM = QueueItemMAM;
 				ReCalculateSciencePower();
@@ -446,11 +446,11 @@ void ANogsResearchSubsystem::TickMAMResearch()
 			{
 				if (!ResearchTreeParents.Contains(QueueItemMAM))
 				{
-					UE_LOG(LogNogsResearchCpp, Error, TEXT("ResearchTreeParents does not contain QueueItemMAM of %s"), *QueueItemMAM->GetClass()->GetName());
+					UE_LOG(LogNogsResearchCpp, Error, TEXT("ResearchTreeParents does not contain QueueItemMAM of %s"), *UKismetSystemLibrary::GetDisplayName(QueueItemMAM));
 				}
 				else
 				{
-					UE_LOG(LogNogsResearchCpp, Display, TEXT("Used items from researcher to initiate MAM research %s"), *QueueItemMAM->GetClass()->GetName());
+					UE_LOG(LogNogsResearchCpp, Display, TEXT("Used items from researcher to initiate MAM research %s"), *UKismetSystemLibrary::GetDisplayName(QueueItemMAM));
 					RManager->InitiateResearch(mBufferInventoryMAM, QueueItemMAM, *ResearchTreeParents.Find(QueueItemMAM));
 					QueueItemLockedMAM = QueueItemMAM;
 					ReCalculateSciencePower();
@@ -473,8 +473,9 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 	if (!QueueItemHUB) {
 		return;
 	}
-	if (SManager->GetActiveSchematic() != QueueItemHUB) {
-		UE_LOG(LogNogsResearchCpp, Warning, TEXT("Set the Active Schematic to the QueueItem of %s"), *QueueItemHUB->GetClass()->GetName());
+	const auto activeSchem = SManager->GetActiveSchematic();
+	if (activeSchem != QueueItemHUB) {
+		UE_LOG(LogNogsResearchCpp, Warning, TEXT("Changed the Active Schematic from %s to the QueueItem of %s"), *UKismetSystemLibrary::GetDisplayName(activeSchem), *UKismetSystemLibrary::GetDisplayName(QueueItemHUB));
 		SManager->SetActiveSchematic(QueueItemHUB);
 	}
 	if (BuiltResearchers.IsValidIndex(BuildingIterateIndexHUB)) {
@@ -489,7 +490,7 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 		// Update buildings that may have been missed when ex. NoPower cheat changes
 		building->CheckPower();
 		if (!building->Registered) {
-			UE_LOG(LogNogsResearchLoopDebugging, Warning, TEXT("Researcher %s no longer registered after power update, skipping this tick"), *GetName());
+			UE_LOG(LogNogsResearchLoopDebugging, Warning, TEXT("Researcher %s no longer registered after power update, skipping this tick"), *UKismetSystemLibrary::GetDisplayName(building));
 			return;
 		}
 
@@ -605,7 +606,7 @@ bool ANogsResearchSubsystem::QueueSchematic(TSubclassOf<class UFGSchematic> Sche
 	{
 		if (Schematic.GetDefaultObject()->mType == ESchematicType::EST_MAM)
 		{
-			UE_LOG(LogNogsResearchCpp, Display, TEXT("Added %s to MAM Queue"), *Schematic);
+			UE_LOG(LogNogsResearchCpp, Display, TEXT("Added %s to MAM Queue"), *UKismetSystemLibrary::GetDisplayName(Schematic));
 			if (QueueMAM.Contains(Schematic))
 				return true;
 
@@ -614,7 +615,7 @@ bool ANogsResearchSubsystem::QueueSchematic(TSubclassOf<class UFGSchematic> Sche
 		}
 		else
 		{
-			UE_LOG(LogNogsResearchCpp, Display, TEXT("Added %s to HUB Queue"), *Schematic);
+			UE_LOG(LogNogsResearchCpp, Display, TEXT("Added %s to HUB Queue"), *UKismetSystemLibrary::GetDisplayName(Schematic));
 			if (QueueHUB.Contains(Schematic))
 				return true;
 
@@ -631,7 +632,7 @@ bool ANogsResearchSubsystem::RemoveQueueSchematic(TSubclassOf<class UFGSchematic
 	{
 		if (QueueMAM.Contains(Schematic))
 		{
-			UE_LOG(LogNogsResearchCpp, Display, TEXT("Removed %s from MAM Queue"), *Schematic);
+			UE_LOG(LogNogsResearchCpp, Display, TEXT("Removed %s from MAM Queue"), *UKismetSystemLibrary::GetDisplayName(Schematic));
 			QueueMAM.Remove(Schematic);
 			return true;
 		}
@@ -640,12 +641,12 @@ bool ANogsResearchSubsystem::RemoveQueueSchematic(TSubclassOf<class UFGSchematic
 	{
 		if (QueueHUB.Contains(Schematic))
 		{
-			UE_LOG(LogNogsResearchCpp, Display, TEXT("Removed %s from HUB Queue"), *Schematic);
+			UE_LOG(LogNogsResearchCpp, Display, TEXT("Removed %s from HUB Queue"), *UKismetSystemLibrary::GetDisplayName(Schematic));
 			QueueHUB.Remove(Schematic);
 			return true;
 		}
 	}
-	UE_LOG(LogNogsResearchCpp, Warning, TEXT("Failed to dequeue %s"), *Schematic);
+	UE_LOG(LogNogsResearchCpp, Warning, TEXT("Failed to dequeue %s"), *UKismetSystemLibrary::GetDisplayName(Schematic));
 	return false;
 }
 

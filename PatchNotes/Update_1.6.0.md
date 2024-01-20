@@ -1,0 +1,29 @@
+SML3.7/server support. UX improvements. Additional Science Power curve option.
+
+
+
+
+![Image](https://i.imgur.com/btFKmZt.jpg)
+
+This update brought to you by Robb.
+If you enjoy my work, please consider my [completely optional tip jar](https://ko-fi.com/robb4).
+
+## New Stuff
+
+- New linear Science Power curve option
+  - Not really balance tested yet
+  - Use `/nogsresearch_curve` chat command to switch between curves
+  - Thanks MrBobologo for the idea for this curve
+
+## Changed Stuff
+
+- Revealed all Nog's Research-added schematics from the start
+  - This means you no longer need to research Researchers #2 to see Research Accelerators for example
+  - As far as I know, nothing else in the game uses this feature (dependencies between hub milestones) and it's kinda confusing to the end user, so I decided to remove it for now.
+
+## Known Bugs
+
+- Multiplayer clients always see the default Science Power curve selected upon hovering the help tooltip in the HUB
+- Reordering the queue as a client can sometimes cause entries to duplicate, but the system will correct itself when the queue is processed, so this is a visual problem only
+- Adding and removing items from the queue in a specific order can bypass MAM research tree dependencies
+- When opened through sources other than the HUB Terminal (ex. the Remote Research Module in PowerSuit), the HUB interface can be inoperable until you use the regular HUB Terminal again
