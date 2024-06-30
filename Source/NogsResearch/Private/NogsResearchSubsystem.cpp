@@ -117,24 +117,9 @@ void ANogsResearchSubsystem::UnRegisterResearcher(ANogsBuildableResearcher* buil
 
 ANogsResearchSubsystem* ANogsResearchSubsystem::Get(UObject* WorldContext)
 {
-	if (!WorldContext) {
-		return nullptr;
-	}
-	if (WorldContext->GetWorld()) {
-
-		TArray<AActor*> arr;
-		UGameplayStatics::GetAllActorsOfClass(WorldContext->GetWorld(), ANogsResearchSubsystem::StaticClass(), arr);
-		if (arr.IsValidIndex(0)) {
-			ANogsResearchSubsystem* out = Cast<ANogsResearchSubsystem>(arr[0]);
-			return out;
-		}
-		else {
-			return nullptr;
-		}
-	}
-	else {
-		return nullptr;
-	}
+	// This approach would break if a C++ version was spawned or was persisted via save game
+	// The blueprint version descends from this class, so it gets found instead as long as it got spawned properly
+	return Cast<ANogsResearchSubsystem>(UGameplayStatics::GetActorOfClass(WorldContext, StaticClass()));
 }
 
 bool ANogsResearchSubsystem::GrabItems(UFGInventoryComponent* SourceInventory, TSubclassOf< class UFGSchematic > Schematic)
