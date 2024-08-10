@@ -13,7 +13,8 @@ Queue up HUB and MAM research, and automatically submit items towards them via n
 
 Please report bugs on [on Discord](https://discord.gg/HT4w3qEGMQ) or [on GitHub](https://github.com/Nogg-aholic/NogsResearch/issues).
 
-_This mod is currently being maintained by Robb#6731. Contact him if you want up to date source code._
+_This mod currently maintained by Robb._
+_If you enjoy my work, please consider donating to my [completely optional tip jar](https://ko-fi.com/robb4)._
 
 ## Features
 
@@ -33,7 +34,8 @@ but the earlier you add it,
 the more you'll be able to take advantage of the research-time-shortening feature.
 
 The HUB and MAM queueing functionality are available immediately upon installing the mod.
-You can queue milestones or nodes by dragging them into the queue, and they can be reordered the same way.
+
+You can **queue milestones or nodes by dragging and dropping them into the queue** via their pointing-hand-icon handles, and they can be reordered the same way.
 
 ### Researchers
 
@@ -93,7 +95,7 @@ and for storing uncommonly used items that you would otherwise end up submitting
 Queue and Science Power demonstration
 
 <video controls="" width="720" height="405">
-  <source src="https://cdn.discordapp.com/attachments/623891487683510323/1009984077916557362/FactoryGame-Win64-Shipping_0Kqgil1aOS.mp4" autoplay="false" controls="true" type="video/mp4">
+  <source src="https://github.com/Nogg-aholic/NogsResearch/raw/main/Images/DemoVideo.mp4" autoplay="false" controls="true" type="video/mp4">
 </video>
 
 **(Outdated!)** Spotlight videos by LK Aice:
@@ -121,7 +123,6 @@ as well as construct and operate the research buildings.
 - Fluid Researchers will not graphically update their displayed fluid count (in response to being taken by the research system) until fluid flow changes or they are interacted with.
 - It's possible to get duplicate entries in the queues by reordering items. They should correct themselves as researches complete.
 - Schematic Dependency Tree viewing in the HUB is inconsistent, but vanilla and modded schematics very rarely use this feature regardless.
-- Adding and removing items from the queue in a specific order can bypass MAM research tree dependencies
 
 ## Credits
 
