@@ -12,9 +12,6 @@
 #include "FGInventoryLibrary.h"
 
 #include "FGInventoryComponent.h"
-#include "Patching/BlueprintHookHelper.h"
-#include "Patching/BlueprintHookManager.h"
-#include "Registry/ModContentRegistry.h"
 #include "NogsResearchSubsystem.generated.h"
 
 
@@ -25,6 +22,7 @@ class NOGSRESEARCH_API ANogsResearchSubsystem : public AModSubsystem, public IFG
 
 		ANogsResearchSubsystem();
 
+	virtual void Init() override;
 	virtual void BeginPlay() override;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

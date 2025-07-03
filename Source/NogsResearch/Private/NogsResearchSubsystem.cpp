@@ -1,6 +1,11 @@
 #include "NogsResearchSubsystem.h"
 
 #include "Net/UnrealNetwork.h"
+#include "Kismet/GameplayStatics.h"
+#include "UObject/ConstructorHelpers.h"
+#include "Kismet/KismetSystemLibrary.h"
+#include "Engine/World.h"
+#include "FGPlayerController.h"
 
 #include "NogsResearch.h"
 #include "FactoryGame.h"
@@ -20,6 +25,10 @@ ANogsResearchSubsystem::ANogsResearchSubsystem() : Super() {
 	
 	this->EnableSubmitItems = false;
 	this->MamBufferInventorySize = 18;
+	
+	// Create MAM buffer inventory
+	mBufferInventoryMAM = CreateDefaultSubobject<UFGInventoryComponent>(TEXT("MAMBufferInventory"));
+	mBufferInventoryMAM->SetDefaultSize(MamBufferInventorySize);
 }
 
 void ANogsResearchSubsystem::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -38,22 +47,19 @@ void ANogsResearchSubsystem::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 	DOREPLIFETIME(ANogsResearchSubsystem, TimeSpentMAM);
 }
 
+void ANogsResearchSubsystem::Init()
+{
+	Super::Init();
+	
+	SManager = AFGSchematicManager::Get(GetWorld());
+	RManager = AFGResearchManager::Get(GetWorld());
+}
+
 void ANogsResearchSubsystem::BeginPlay()
 {
 	Super::BeginPlay();
 
-	FString Name = TEXT("BufferInventory");
-
 	if (HasAuthority()) {
-		if (!mBufferInventoryMAM) {
-			Name = Name.Append(GetName());
-			mBufferInventoryMAM = UFGInventoryLibrary::CreateInventoryComponent(this, *Name);
-			UE_LOG(LogNogsResearchCpp, Warning, TEXT("Created MAM buffer inventory with name %s"), *Name);
-		}
-		else {
-			UE_LOG(LogNogsResearchCpp, Display, TEXT("MAM buffer inventory already exists, has name %s"), *mBufferInventoryMAM->GetName());
-		}
-
 		const auto size = this->MamBufferInventorySize;
 		if (QueueItemMAM) {
 			UpdateMAMBufferFilters(false);
@@ -69,9 +75,6 @@ void ANogsResearchSubsystem::BeginPlay()
 
 		mBufferInventoryMAM->mItemFilter.BindUFunction(this, "VerifyMAMBufferItemTransfer");
 	}
-
-	SManager = AFGSchematicManager::Get(GetWorld());
-	RManager = AFGResearchManager::Get(GetWorld());
 }
 
 
@@ -391,11 +394,12 @@ void ANogsResearchSubsystem::TickMAMResearch()
 
 	if (RManager->IsResearchComplete(QueueItemLockedMAM)) {
 		UE_LOG(LogNogsResearchCpp, Display, TEXT("Awarding rewards for MAM research %s"), *UKismetSystemLibrary::GetDisplayName(QueueItemLockedMAM));
-		TArray< TSubclassOf< UFGSchematic > > arr;
-		int32 rewardIndex = 0;
 		AFGCharacterPlayer* character = Cast<AFGCharacterPlayer>(GetInstigator());
-		while (RManager->ClaimResearchResults(character, QueueItemLockedMAM, rewardIndex)) {
-			rewardIndex++;
+		if (character) {
+			AFGPlayerController* controller = Cast<AFGPlayerController>(character->GetController());
+			if (controller) {
+				RManager->ClaimResearchResults(controller, QueueItemLockedMAM);
+			}
 		}
 		QueueItemLockedMAM = nullptr;
 		return;
@@ -409,11 +413,25 @@ void ANogsResearchSubsystem::TickMAMResearch()
 			if (ResearchTreeParents.Contains(QueueItemMAM))
 			{
 				UE_LOG(LogNogsResearchCpp, Display, TEXT("Initiated MAM research %s with stored items"), *UKismetSystemLibrary::GetDisplayName(QueueItemMAM));
-				RManager->InitiateResearch(mBufferInventoryMAM, QueueItemMAM, *ResearchTreeParents.Find(QueueItemMAM));
-				QueueItemLockedMAM = QueueItemMAM;
-				ReCalculateSciencePower();
-				QueueMAM.Remove(QueueItemMAM);
-				QueueItemMAM = nullptr;
+				// Get a player controller for research initiation
+				UWorld* World = GetWorld();
+				if (World) {
+					AFGPlayerController* Controller = nullptr;
+					for (FConstPlayerControllerIterator Iterator = World->GetPlayerControllerIterator(); Iterator; ++Iterator) {
+						AFGPlayerController* PC = Cast<AFGPlayerController>(*Iterator);
+						if (PC) {
+							Controller = PC;
+							break;
+						}
+					}
+					if (Controller) {
+						RManager->InitiateResearch(Controller, QueueItemMAM, *ResearchTreeParents.Find(QueueItemMAM));
+						QueueItemLockedMAM = QueueItemMAM;
+						ReCalculateSciencePower();
+						QueueMAM.Remove(QueueItemMAM);
+						QueueItemMAM = nullptr;
+					}
+				}
 			}
 			return;
 		}
@@ -436,11 +454,25 @@ void ANogsResearchSubsystem::TickMAMResearch()
 				else
 				{
 					UE_LOG(LogNogsResearchCpp, Display, TEXT("Used items from researcher to initiate MAM research %s"), *UKismetSystemLibrary::GetDisplayName(QueueItemMAM));
-					RManager->InitiateResearch(mBufferInventoryMAM, QueueItemMAM, *ResearchTreeParents.Find(QueueItemMAM));
-					QueueItemLockedMAM = QueueItemMAM;
-					ReCalculateSciencePower();
-					QueueMAM.Remove(QueueItemMAM);
-					QueueItemMAM = nullptr;
+					// Get a player controller for research initiation
+					UWorld* World = GetWorld();
+					if (World) {
+						AFGPlayerController* Controller = nullptr;
+						for (FConstPlayerControllerIterator Iterator = World->GetPlayerControllerIterator(); Iterator; ++Iterator) {
+							AFGPlayerController* PC = Cast<AFGPlayerController>(*Iterator);
+							if (PC) {
+								Controller = PC;
+								break;
+							}
+						}
+						if (Controller) {
+							RManager->InitiateResearch(Controller, QueueItemMAM, *ResearchTreeParents.Find(QueueItemMAM));
+							QueueItemLockedMAM = QueueItemMAM;
+							ReCalculateSciencePower();
+							QueueMAM.Remove(QueueItemMAM);
+							QueueItemMAM = nullptr;
+						}
+					}
 				}
 			}
 		}
@@ -482,7 +514,21 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 		const UFGSchematic* CDO = QueueItemHUB.GetDefaultObject();
 		if (SManager->IsSchematicPaidOff(QueueItemHUB) && CDO->mType != ESchematicType::EST_Alternate)
 		{
-			SManager->LaunchShip();
+			// Get a player for ship launch
+			UWorld* World = GetWorld();
+			AFGCharacterPlayer* Player = nullptr;
+			if (World) {
+				for (FConstPlayerControllerIterator Iterator = World->GetPlayerControllerIterator(); Iterator; ++Iterator) {
+					AFGPlayerController* PC = Cast<AFGPlayerController>(*Iterator);
+					if (PC && PC->GetPawn()) {
+						Player = Cast<AFGCharacterPlayer>(PC->GetPawn());
+						if (Player) break;
+					}
+				}
+			}
+			if (Player) {
+				SManager->LaunchShip(Player);
+			}
 			QueueItemLockedHUB = QueueItemHUB;
 			ReCalculateSciencePower();
 			UE_LOG(LogNogsResearchLoopDebugging, Error, TEXT("Launched ship mShipLandTimeStamp: %f mShipLandTimeStampSave: %f"), SManager->mShipLandTimeStamp, SManager->mShipLandTimeStampSave);
@@ -513,7 +559,7 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 						}
 
 						UE_LOG(LogNogsResearchCpp, Log, TEXT("Grab Items Succeed EST_Alternate route"));
-						SManager->GiveAccessToSchematic(QueueItemHUB, nullptr);
+						SManager->GiveAccessToSchematic(QueueItemHUB, nullptr, ESchematicUnlockFlags::None);
 						QueueItemLockedHUB = QueueItemHUB;
 						ReCalculateSciencePower();
 						QueueHUB.Remove(QueueItemHUB);
@@ -524,7 +570,21 @@ void ANogsResearchSubsystem::TickSchematicResearch()
 				else if (SManager->IsSchematicPaidOff(QueueItemHUB))
 				{
 					UE_LOG(LogNogsResearchCpp, Log, TEXT("Grab Items Succeed Not EST_Alternate route"));
-					SManager->LaunchShip();
+					// Get a player for ship launch
+					UWorld* World = GetWorld();
+					AFGCharacterPlayer* Player = nullptr;
+					if (World) {
+						for (FConstPlayerControllerIterator Iterator = World->GetPlayerControllerIterator(); Iterator; ++Iterator) {
+							AFGPlayerController* PC = Cast<AFGPlayerController>(*Iterator);
+							if (PC && PC->GetPawn()) {
+								Player = Cast<AFGCharacterPlayer>(PC->GetPawn());
+								if (Player) break;
+							}
+						}
+					}
+					if (Player) {
+						SManager->LaunchShip(Player);
+					}
 					QueueItemLockedHUB = QueueItemHUB;
 					ReCalculateSciencePower();
 					QueueHUB.Remove(QueueItemHUB);
@@ -585,7 +645,8 @@ bool ANogsResearchSubsystem::QueueSchematic(TSubclassOf<class UFGSchematic> Sche
 	TArray< TSubclassOf< UFGSchematic >> AllAviSchematics;
 
 	SManager->GetAllPurchasedSchematics(AllSchematics);
-	SManager->GetAvailableSchematics(AllAviSchematics);
+	TArray<ESchematicType> types = {ESchematicType::EST_Milestone, ESchematicType::EST_MAM, ESchematicType::EST_Alternate, ESchematicType::EST_Story};
+	SManager->GetAvailableSchematicsOfTypes(types, AllAviSchematics);
 
 	if (!AllSchematics.Contains(Schematic) && AllAviSchematics.Contains(Schematic))
 	{

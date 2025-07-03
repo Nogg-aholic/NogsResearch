@@ -9,7 +9,6 @@
 #include "NogsResearch.h"
 
 ANogsBuildableResearcher::ANogsBuildableResearcher() : Super() {
-	this->mPowerInfoClass = UFGPowerInfoComponent::StaticClass();
 	this->mInventorySizeX = 1;
 	this->mInventorySizeY = 1;
 	this->mPowerConsumptionExponent = 1.60000002384186;
@@ -19,7 +18,6 @@ ANogsBuildableResearcher::ANogsBuildableResearcher() : Super() {
 	this->mPendingPotential = 1;
 	this->mMinPotential = 0.00999999977648258;
 	this->mMaxPotential = 1;
-	this->mMaxPotentialIncreasePerCrystal = 0.5;
 	this->mFluidStackSizeDefault = EStackSize::SS_FLUID;
 	this->mSignificanceRange = 18000;
 	this->MaxRenderDistance = -1;
@@ -59,7 +57,6 @@ void ANogsBuildableResearcher::BeginPlay()
 	FOR_EACH_PIPE_INLINE_COMPONENTS(connection) {
 		if (connection->GetPipeConnectionType() == EPipeConnectionType::PCT_CONSUMER)
 		{
-			connection->SetInventory(GetStorageInventory());
 			connection->SetInventoryAccessIndex(0);
 			Pipe = connection;
 			GetStorageInventory()->AddArbitrarySlotSize(0, 5000 * mFluidStackSizeMultiplier);
